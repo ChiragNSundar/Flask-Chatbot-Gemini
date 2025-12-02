@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini AI Ultimate</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <!-- Background -->
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-layout">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button onclick="createNewChat()" class="new-chat-btn">
+                    <i class="fa-solid fa-plus"></i> New Chat
+                </button>
+            </div>
+            <div id="conversation-list" class="conversation-list">
+                <!-- Chat history items go here -->
+            </div>
+        </div>
+
+        <!-- MAIN CHAT AREA -->
+        <div class="main-container">
+            <div class="chat-header">
+                <div class="logo-container">
+                    <i class="fa-solid fa-brain gradient-icon"></i>
+                    <span>Gemini AI</span>
+                    <div id="status-dot" class="status-dot online" title="Online"></div>
+                </div>
+                <div class="header-controls">
+                    <button id="settings-btn" class="icon-btn" onclick="toggleSettings()" title="Settings">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Settings Panel (Hidden by default) -->
+            <div id="settings-panel" class="settings-panel">
+                <div class="setting-item">
+                    <label>Creativity: <span id="temp-value">0.7</span></label>
+                    <input type="range" id="temp-slider" min="0" max="2" step="0.1" value="0.7">
+                    <div class="labels">
+                        <span>Precise</span>
+                        <span>Balanced</span>
+                        <span>Creative</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="chat-box" class="chat-box">
+                <div class="message bot-message">
+                    <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="content">Hello! Select a chat or start a new one. I can see images and hear you now!</div>
+                </div>
+            </div>
+
+            <!-- Image Preview Area -->
+            <div id="image-preview-container" class="hidden">
+                <img id="image-preview" src="" alt="Preview">
+                <button onclick="clearImage()" class="close-img-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <!-- Image Upload -->
+                    <label for="image-upload" class="attach-btn">
+                        <i class="fa-solid fa-paperclip"></i>
+                    </label>
+                    <input type="file" id="image-upload" accept="image/*" hidden>
+
+                    <textarea id="user-input" placeholder="Type or speak..." rows="1"></textarea>
+
+                    <!-- Mic Button -->
+                    <button id="mic-btn" onclick="toggleVoice()"><i class="fa-solid fa-microphone"></i></button>
+
+                    <button onclick="sendMessage()" id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+                    <button onclick="stopGeneration()" id="stop-btn" class="hidden"><i class="fa-solid fa-stop"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

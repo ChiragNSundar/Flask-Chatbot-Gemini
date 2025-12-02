@@ -1,0 +1,147 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+
+body {
+    background-color: #0f0f1a;
+    height: 100vh;
+    color: #fff;
+    overflow: hidden;
+}
+
+/* --- Layout --- */
+.app-layout {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* --- Sidebar --- */
+.sidebar {
+    width: 260px;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.new-chat-btn {
+    width: 100%;
+    padding: 12px;
+    background: #6c5ce7;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 20px;
+    transition: 0.2s;
+}
+.new-chat-btn:hover { background: #5b4bc4; }
+
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.chat-item {
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #ccc;
+    transition: 0.2s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    justify-content: space-between;
+}
+.chat-item:hover { background: rgba(255,255,255,0.1); color: white; }
+.chat-item.active { background: rgba(255,255,255,0.15); color: white; font-weight: 600; }
+.delete-chat { color: #ff4757; opacity: 0; transition: 0.2s; }
+.chat-item:hover .delete-chat { opacity: 1; }
+
+/* --- Main Container --- */
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: rgba(20, 20, 35, 0.6);
+}
+
+/* --- Background Blobs --- */
+.background-blobs { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.6; animation: float 10s infinite; }
+.blob-1 { width: 400px; height: 400px; background: #6c5ce7; top: -100px; left: -100px; }
+.blob-2 { width: 300px; height: 300px; background: #00ff88; bottom: -50px; right: -50px; }
+@keyframes float { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(30px, 50px); } }
+
+/* --- Header --- */
+.chat-header { padding: 15px 30px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+.logo-container { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.gradient-icon { background: linear-gradient(135deg, #00ff88, #00ccff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 1.5rem; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; box-shadow: 0 0 10px #00ff88; }
+.icon-btn { background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer; transition: 0.3s; }
+.icon-btn:hover { color: #00ff88; transform: rotate(90deg); }
+
+/* --- Settings Panel (FIXED) --- */
+.settings-panel {
+    background: rgba(0, 0, 0, 0.4);
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.4s ease;
+    padding: 0 30px; /* Horizontal padding only */
+    opacity: 0;
+}
+.settings-panel.open {
+    max-height: 120px;
+    padding: 20px 30px; /* Vertical padding added only when open */
+    opacity: 1;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.setting-item label { display: block; margin-bottom: 10px; font-size: 0.9rem; color: #ccc; }
+#temp-value { color: #00ff88; font-weight: bold; margin-left: 5px; }
+
+/* Slider */
+input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+    background: #00ff88; cursor: pointer; margin-top: -6px;
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.2); border-radius: 2px;
+}
+.labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: #888; margin-top: 5px; }
+
+/* --- Chat Box --- */
+.chat-box { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+.message { display: flex; gap: 15px; max-width: 80%; }
+.avatar { width: 35px; height: 35px; border-radius: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.content { padding: 12px 18px; border-radius: 12px; background: rgba(255,255,255,0.05); line-height: 1.6; }
+.user-message { align-self: flex-end; flex-direction: row-reverse; }
+.user-message .content { background: #6c5ce7; }
+.message-img { max-width: 100%; border-radius: 8px; margin-bottom: 10px; display: block; }
+
+/* --- Input Area --- */
+.input-area { padding: 20px; }
+.input-wrapper { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 10px; display: flex; align-items: flex-end; gap: 10px; border: 1px solid rgba(255,255,255,0.1); }
+textarea { flex: 1; background: transparent; border: none; color: white; resize: none; outline: none; max-height: 120px; padding: 10px; }
+button { background: transparent; border: none; color: #aaa; cursor: pointer; padding: 10px; border-radius: 8px; transition: 0.2s; }
+button:hover { background: rgba(255,255,255,0.1); color: white; }
+#send-btn { background: #6c5ce7; color: white; }
+#send-btn:hover { background: #5b4bc4; }
+#mic-btn.recording { color: #ff4757; animation: pulseMic 1s infinite; }
+@keyframes pulseMic { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+/* Image Preview */
+#image-preview-container { padding: 10px 20px; position: relative; display: inline-block; }
+#image-preview { height: 60px; border-radius: 8px; border: 1px solid #555; }
+.close-img-btn { position: absolute; top: 5px; right: 15px; background: red; color: white; border-radius: 50%; width: 20px; height: 20px; padding: 0; font-size: 12px; }
+.hidden { display: none !important; }
+
+/* Code Blocks */
+pre { background: #1e1e1e; padding: 10px; border-radius: 8px; overflow-x: auto; }
