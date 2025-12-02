@@ -18,10 +18,9 @@ let currentImageBase64 = null;
 
 // --- 1. INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    loadConversations();
-    createNewChat();
+    // FIX: Load conversations first, then decide whether to load existing or create new
+    loadConversations(true);
 
-    // Initialize Slider Value
     if(tempSlider && tempValue) {
         tempValue.textContent = tempSlider.value;
     }
@@ -39,7 +38,7 @@ if(tempSlider) {
 }
 
 // --- 3. SIDEBAR LOGIC ---
-function loadConversations() {
+function loadConversations(autoLoadFirst = false) {
     fetch('/api/conversations')
         .then(res => res.json())
         .then(chats => {
@@ -53,6 +52,17 @@ function loadConversations() {
                 `;
                 conversationList.appendChild(div);
             });
+
+            // FIX: Auto-load logic
+            if (autoLoadFirst) {
+                if (chats.length > 0) {
+                    // Load the most recent chat instead of creating a new one
+                    loadChat(chats[0].id);
+                } else {
+                    // Only create new if list is empty
+                    createNewChat();
+                }
+            }
         });
 }
 
@@ -60,13 +70,17 @@ function createNewChat() {
     fetch('/api/conversations', { method: 'POST' })
         .then(res => res.json())
         .then(chat => {
-            loadConversations();
+            // If backend returns an existing empty chat, it will have the same ID
+            // If it creates a new one, it will have a new ID
             loadChat(chat.id);
+            // Refresh list to show the "New Chat" item
+            loadConversations();
         });
 }
 
 function loadChat(chatId) {
     currentChatId = chatId;
+    // Refresh list to update 'active' class
     loadConversations();
     chatBox.innerHTML = '';
 
@@ -85,12 +99,20 @@ function loadChat(chatId) {
 }
 
 function deleteChat(chatId, event) {
-    event.stopPropagation();
+    event.stopPropagation(); // Stop click from loading the chat
+
     if(!confirm("Delete this chat?")) return;
+
     fetch(`/api/conversations/${chatId}`, { method: 'DELETE' })
         .then(() => {
-            if(currentChatId === chatId) createNewChat();
-            else loadConversations();
+            // If we deleted the active chat, reset
+            if(currentChatId === chatId) {
+                currentChatId = null;
+                // Reload list and auto-select the next available one
+                loadConversations(true);
+            } else {
+                loadConversations();
+            }
         });
 }
 
@@ -145,7 +167,7 @@ async function sendMessage() {
 
     appendMessage(text, 'user-message', false, false, currentImageBase64);
     userInput.value = '';
-    userInput.style.height = 'auto'; // Reset height
+    userInput.style.height = 'auto';
     const imgToSend = currentImageBase64;
     clearImage();
 
@@ -164,7 +186,7 @@ async function sendMessage() {
                 chat_id: currentChatId,
                 message: text,
                 image: imgToSend,
-                temperature: tempSlider.value // Send the slider value
+                temperature: tempSlider.value
             }),
             signal: abortController.signal
         });
@@ -190,7 +212,7 @@ async function sendMessage() {
                             chatBox.scrollTop = chatBox.scrollHeight;
                         }
                         if (data.done) {
-                            loadConversations();
+                            loadConversations(); // Refresh titles
                         }
                     } catch (e) {}
                 }
@@ -238,7 +260,6 @@ function toggleButtons(loading) {
     stopBtn.classList.toggle('hidden', !loading);
 }
 
-// Markdown Config
 marked.setOptions({
     highlight: function(code, lang) {
         const language = hljs.getLanguage(lang) ? lang : 'plaintext';
@@ -246,18 +267,15 @@ marked.setOptions({
     }
 });
 
-// --- 8. EVENT LISTENERS (ENTER KEY FIX) ---
 if (userInput) {
-    // Auto-resize
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
     });
 
-    // Enter to Send, Shift+Enter for New Line
     userInput.addEventListener("keydown", function(event) {
         if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault(); // Stop the new line
+            event.preventDefault();
             sendMessage();
         }
     });
