@@ -9,52 +9,41 @@ const resumeUpload = document.getElementById('resume-upload');
 let currentStep = -1;
 let collectedData = {};
 
+// --- RESUME STEPS (Mirroring Python for client-side logic) ---
+const RESUME_STEPS = [
+    { field: "full_name", type: "text" },
+    { field: "email", type: "email" },
+    { field: "phone", type: "phone" },
+    { field: "experience_level", type: "selection", suggestions: ["Intern", "Entry Level", "Mid Level", "Senior", "Lead"] },
+    { field: "job_title", type: "text" },
+    { field: "skills", type: "text" },
+    { field: "summary", type: "long_text" },
+    { field: "critique", type: "final" }
+];
+
 document.addEventListener('DOMContentLoaded', () => {
-    sendResumeMessage(true);
-});
-
-resumeUpload.addEventListener('change', function() {
-    const file = this.files[0];
-    if (file) {
-        uploadResume(file);
+    // 1. Local Storage Persistence
+    const savedData = localStorage.getItem('resumeData');
+    if (savedData) {
+        collectedData = JSON.parse(savedData);
+        updateLiveForm(collectedData);
+        // Find the next step based on loaded data
+        sendResumeMessage(false, true);
+    } else {
+        sendResumeMessage(true);
     }
+
+    // 2. Two-Way Data Binding (Listen to form changes)
+    finalForm.querySelectorAll('input, textarea').forEach(field => {
+        field.addEventListener('input', function() {
+            const fieldName = this.id.replace('form-', '');
+            collectedData[fieldName] = this.value.trim();
+            localStorage.setItem('resumeData', JSON.stringify(collectedData));
+        });
+    });
 });
 
-function uploadResume(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    appendMessage(`Uploading: ${file.name}...`, 'user-message');
-    const loadingId = showTypingIndicator();
-
-    fetch('/api/upload-resume', {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        removeMessage(loadingId);
-        if (data.error) {
-            appendMessage(`⚠️ ${data.error}`, 'bot-message error');
-        } else {
-            collectedData = { ...collectedData, ...data.data };
-            updateLiveForm(collectedData);
-
-            if (Object.keys(collectedData).length > 0) {
-                formPlaceholder.style.display = 'none';
-                finalForm.classList.remove('hidden-form');
-                finalForm.classList.add('visible-form');
-            }
-
-            appendMessage(`✅ ${data.message}`, 'bot-message');
-            sendResumeMessage(false, true);
-        }
-    })
-    .catch(err => {
-        removeMessage(loadingId);
-        appendMessage('Error uploading file.', 'bot-message error');
-    });
-}
+// --- CORE CHAT LOGIC ---
 
 function sendResumeMessage(isInit = false, silentCheck = false) {
     const text = isInit || silentCheck ? '' : userInput.value.trim();
@@ -85,7 +74,7 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
             if (data.response && data.response.trim() !== "") {
-                appendMessage(data.response, 'bot-message');
+                appendMessage(data.response, 'bot-message', true); // Use markdown for welcome back message
             }
 
             if (data.next_step !== undefined && !data.keep_step) {
@@ -95,13 +84,10 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
             if (data.data && !data.keep_step) {
                 collectedData = data.data;
                 updateLiveForm(collectedData);
-                if (Object.keys(collectedData).length > 0) {
-                    formPlaceholder.style.display = 'none';
-                    finalForm.classList.remove('hidden-form');
-                    finalForm.classList.add('visible-form');
-                }
+                localStorage.setItem('resumeData', JSON.stringify(collectedData));
             }
 
+            // Render suggestions/chips immediately
             if (data.suggestions && data.suggestions.length > 0) {
                 renderSuggestions(data.suggestions);
             }
@@ -119,26 +105,73 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
     });
 }
 
+// --- UTILITY FUNCTIONS ---
+
+function uploadResume(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    appendMessage(`Uploading: ${file.name}...`, 'user-message');
+    const loadingId = showTypingIndicator();
+
+    fetch('/api/upload-resume', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        removeMessage(loadingId);
+        if (data.error) {
+            appendMessage(`⚠️ ${data.error}`, 'bot-message error');
+        } else {
+            collectedData = { ...collectedData, ...data.data };
+            updateLiveForm(collectedData);
+            localStorage.setItem('resumeData', JSON.stringify(collectedData));
+
+            if (Object.keys(collectedData).length > 0) {
+                formPlaceholder.style.display = 'none';
+                finalForm.classList.remove('hidden-form');
+                finalForm.classList.add('visible-form');
+            }
+
+            appendMessage(`✅ ${data.message}`, 'bot-message');
+            sendResumeMessage(false, true);
+        }
+    })
+    .catch(err => {
+        removeMessage(loadingId);
+        appendMessage('Error uploading file.', 'bot-message error');
+    });
+}
+
+resumeUpload.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        uploadResume(file);
+    }
+});
+
+
 function renderSuggestions(suggestions) {
     suggestionArea.innerHTML = '';
     suggestions.forEach(text => {
         const chip = document.createElement('div');
         chip.className = 'chip';
-        // Truncate long summaries in chips for display
         chip.innerText = text.length > 50 ? text.substring(0, 50) + "..." : text;
-        chip.title = text; // Show full text on hover
+        chip.title = text;
 
         chip.onclick = () => {
-            // --- FIX: Remove leading heading/numbering before setting input ---
-            let cleanText = text.replace(/^\s*(\*\*Resume Summary \d+:\*\*|\d+\.\s*|Option \d+:\s*|\*\*\s*|\s*\*\*)/i, '').trim();
+            // Robust Regex to remove headings like "Option 1:", "**Summary 1:**", "1. ", etc.
+            let cleanText = text.replace(
+                /^\s*(\*\*[^\*]+:\*\*|\*\*[^\*]+\*\*:\s*|Option\s*\d+\s*:|Summary\s*\d*\s*:|\d+\.\s*|\*\s*)/i,
+                ''
+            ).trim();
 
-            // If the cleaning removed everything, use the original text as a fallback
             if (cleanText.length === 0) {
                 cleanText = text.trim();
             }
 
             userInput.value = cleanText;
-            // ------------------------------------------------------------------
             sendResumeMessage();
         };
         suggestionArea.appendChild(chip);
@@ -146,6 +179,7 @@ function renderSuggestions(suggestions) {
 }
 
 function updateLiveForm(data) {
+    // Update the form fields
     for (const [key, value] of Object.entries(data)) {
         const field = document.getElementById(`form-${key}`);
         if (field) field.value = value;
@@ -194,6 +228,7 @@ function submitFinalForm() {
     .then(res => res.json())
     .then(data => {
         if(data.status === 'success') {
+            localStorage.removeItem('resumeData'); // Clear local storage on success
             successModal.classList.remove('hidden');
         } else {
             alert("Error saving profile: " + (data.error || "Unknown error"));
@@ -237,6 +272,14 @@ function showTypingIndicator() {
 function removeMessage(id) {
     const el = document.getElementById(id);
     if (el) el.remove();
+}
+
+// --- NEW: Clear Profile Function ---
+function clearProfile() {
+    if (confirm("Are you sure you want to clear your current profile and start over?")) {
+        localStorage.removeItem('resumeData');
+        window.location.reload();
+    }
 }
 
 userInput.addEventListener("keypress", function(event) {

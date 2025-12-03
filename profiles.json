@@ -38,5 +38,15 @@
         "skills": "React, Node, AWS",
         "summary": "Proficient UI/UX Developer with 3+ years of experience in designing, developing, and implementing web applications using React, Node.js, and AWS. Strong understanding of UI/UX principles, including user research, wireframing, prototyping, and usability testing. Adept at building scalable and maintainable code, adhering to best practices and industry standards. Collaborative team player with experience working in agile environments at <Company Name> on projects such as <Specific Project>. Seeking a challenging role where I can leverage my technical skills and contribute to innovative product development.",
         "submitted_at": "2025-12-03T11:02:38.645677"
+    },
+    {
+        "full_name": "Hayden Smith",
+        "email": "haydensmith@email.com",
+        "phone": "04501 123 456",
+        "experience_level": "Entry-level",
+        "job_title": "Customer Service (volunteer)",
+        "skills": "Customer service,Numeracy skills,Communication skills,Teamwork,Organisation skills,Problem solving",
+        "summary": "Reliable hard working Year 11 student seeking casual or part-time customer service work in a sports retail environment. Having played soccer for nine years and a keen all-round sports enthusiast, looking to contribute knowledge and proven communications skills.",
+        "submitted_at": "2025-12-03T11:48:36.486317"
     }
 ]

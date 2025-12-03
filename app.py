@@ -67,19 +67,24 @@ RESUME_STEPS = [
      "type": "selection", "suggestions": ["Intern", "Entry Level", "Mid Level", "Senior", "Lead"]},
     {"field": "job_title", "question": "Target **Job Title**?", "mandatory": True, "type": "text",
      "suggestions": ["Data Scientist", "Full Stack Dev", "Product Manager"]},
-    {"field": "skills", "question": "Top 3-5 **Skills**?", "mandatory": True, "type": "text",
-     "suggestions": ["Python, SQL, ML", "React, Node, AWS"]},
+    {"field": "skills", "question": "Top 3-5 **Skills**? (Type 'Suggest Skills' for AI help)", "mandatory": True,
+     "type": "text", "suggestions": ["Python, SQL, ML", "React, Node, AWS", "Suggest Skills"]},
     {"field": "summary", "question": "Professional **Summary**? (Type 'Generate' to see options, or type your own)",
-     "mandatory": True, "type": "long_text", "suggestions": ["Generate Options"]}
+     "mandatory": True, "type": "long_text", "suggestions": ["Generate Options", "Show Example"]},
+    {"field": "critique",
+     "question": "Profile complete! Review your profile on the right. Type 'Critique' for AI feedback or 'Submit' to finalize.",
+     "mandatory": False, "type": "final", "suggestions": ["Critique", "Submit"]}
 ]
 
 
 def find_next_step(current_data):
-    """Finds the index of the first mandatory field that is empty."""
     for i, step in enumerate(RESUME_STEPS):
         field = step['field']
         if step['mandatory'] and not current_data.get(field):
             return i
+        if step['field'] == 'critique':
+            if all(current_data.get(s['field']) for s in RESUME_STEPS if s['mandatory']):
+                return i
     return -1
 
 
@@ -92,7 +97,6 @@ def home(): return render_template('chat.html')
 def resume_page(): return render_template('resume.html')
 
 
-# ... (Existing /api/conversations and /chat routes remain the same) ...
 @app.route('/api/conversations', methods=['GET'])
 def get_conversations():
     chats = Conversation.query.order_by(Conversation.created_at.desc()).all()
@@ -177,6 +181,7 @@ def chat():
 
 
 # --- RESUME API ---
+
 @app.route('/api/upload-resume', methods=['POST'])
 def upload_resume():
     if 'file' not in request.files: return jsonify({'error': 'No file uploaded'}), 400
@@ -213,11 +218,38 @@ def resume_chat():
     collected_data = data.get('data', {})
     current_step_index = data.get('step', -1)
 
-    # 1. Validation & Input Handling
+    # 1. Handle Special Commands (Critique, Suggest Skills, Example)
+    if user_input.lower() == 'critique' and collected_data.get('summary'):
+        prompt = f"Critique the following resume profile for a {collected_data.get('job_title')}. Focus on the summary and skills. Profile: {collected_data}"
+        try:
+            ai_resp = model.generate_content(prompt)
+            return jsonify({'response': f"**AI Critique:**\n\n{ai_resp.text}", 'keep_step': True,
+                            'question': RESUME_STEPS[-1]['question'], 'suggestions': RESUME_STEPS[-1]['suggestions']})
+        except:
+            return jsonify({'error': "Critique failed. Try again later.", 'keep_step': True})
+
+    if user_input.lower() == 'suggest skills' and collected_data.get('job_title'):
+        prompt = f"Based on the job title '{collected_data.get('job_title')}' and existing skills '{collected_data.get('skills')}', suggest 3-5 highly relevant, modern skills that are missing. List them separated by a comma."
+        try:
+            ai_resp = model.generate_content(prompt)
+            return jsonify({'response': f"**Suggested Skills:**\n\n{ai_resp.text}", 'keep_step': True,
+                            'question': RESUME_STEPS[5]['question'], 'suggestions': RESUME_STEPS[5]['suggestions']})
+        except:
+            return jsonify({'error': "Skill suggestion failed.", 'keep_step': True})
+
+    if user_input.lower() == 'show example' and collected_data.get('job_title'):
+        prompt = f"Provide a brief, strong example of a professional summary for a {collected_data.get('experience_level')} {collected_data.get('job_title')}."
+        try:
+            ai_resp = model.generate_content(prompt)
+            return jsonify({'response': f"**Example Summary:**\n\n{ai_resp.text}", 'keep_step': True,
+                            'question': RESUME_STEPS[6]['question'], 'suggestions': RESUME_STEPS[6]['suggestions']})
+        except:
+            return jsonify({'error': "Example generation failed.", 'keep_step': True})
+
+    # 2. Validation & Input Handling (for current step)
     if current_step_index != -1 and user_input:
         current_rule = RESUME_STEPS[current_step_index]
 
-        # Name Validation: No numbers + Min length
         if current_rule['field'] == 'full_name':
             if any(char.isdigit() for char in user_input):
                 return jsonify({'error': "Name cannot contain numbers.", 'keep_step': True})
@@ -230,15 +262,13 @@ def resume_chat():
         if current_rule['type'] == 'phone' and not re.search(r"\d{10}", user_input):
             return jsonify({'error': "Invalid phone (10+ digits).", 'keep_step': True})
 
-        # --- MODIFIED: Summary Generation Logic ---
+        # Summary Generation Logic
         if current_rule['field'] == 'summary' and 'generate' in user_input.lower():
             try:
-                # Request 2 options and instruct to use placeholders
                 prompt = f"Write 2 distinct professional resume summaries (separated by |) for a {collected_data.get('job_title')} with skills {collected_data.get('skills')}. Use placeholders like <Company Name> or <Specific Project> for generic parts."
                 ai_resp = model.generate_content(prompt)
                 options = [opt.strip() for opt in ai_resp.text.split('|') if opt.strip()]
 
-                # New instruction message for the user
                 new_response = "Here are two summary options. Click on the one you prefer, then review it carefully. **Replace any generic text** (like <Company Name> or <Role>) with your specific details before submitting."
 
                 return jsonify({
@@ -248,14 +278,14 @@ def resume_chat():
                 })
             except:
                 return jsonify({'error': "Generation failed. Please type your summary.", 'keep_step': True})
-        # --- END MODIFIED LOGIC ---
 
+        # Save Input
         collected_data[current_rule['field']] = user_input
 
-    # 2. Determine Next Step
+    # 3. Determine Next Step
     next_step_index = find_next_step(collected_data)
 
-    # 3. Formulate Response
+    # 4. Formulate Response
     if next_step_index == -1:
         return jsonify(
             {'response': "Profile complete! Please review and submit.", 'finished': True, 'data': collected_data})
@@ -264,7 +294,11 @@ def resume_chat():
 
     response_text = ""
     if current_step_index == -1 and not user_input:
-        response_text = "Hello! Let's build your resume."
+        # Acknowledge Resuming Session
+        if collected_data.get('full_name'):
+            response_text = f"Welcome back, **{collected_data['full_name']}**! Resuming your profile."
+        else:
+            response_text = "Hello! Let's build your resume."
 
     return jsonify({
         'response': response_text,
@@ -282,18 +316,14 @@ def submit_resume():
         if not new_profile:
             return jsonify({'error': 'No data provided'}), 400
 
-        # --- SERVER SIDE VALIDATION ---
         required_fields = ["full_name", "email", "phone", "experience_level", "job_title", "skills", "summary"]
         missing = [field for field in required_fields if not new_profile.get(field)]
 
         if missing:
             return jsonify({'error': f"Missing mandatory fields: {', '.join(missing)}"}), 400
-        # ------------------------------
 
-        # Add timestamp
         new_profile['submitted_at'] = datetime.utcnow().isoformat()
 
-        # Load existing data
         profiles = []
         if os.path.exists(PROFILES_FILE):
             try:

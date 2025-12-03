@@ -29,7 +29,13 @@
     <div class="resume-layout">
         <!-- Left: Chat -->
         <div class="resume-chat-container">
-            <div class="chat-header"><span><i class="fa-solid fa-robot"></i> AI Interviewer</span></div>
+            <div class="chat-header">
+                <span><i class="fa-solid fa-robot"></i> AI Interviewer</span>
+                <!-- Button to clear local storage and start over -->
+                <button onclick="clearProfile()" class="new-chat-btn" style="width: auto; padding: 8px 15px; margin: 0; background: #ff4757;">
+                    <i class="fa-solid fa-trash"></i> Start New Profile
+                </button>
+            </div>
             <div id="chat-box" class="chat-box"></div>
             <div id="suggestion-area" class="suggestion-area"></div>
 
