@@ -104,8 +104,17 @@ input[type=range] { width: 100%; cursor: pointer; }
 
 .avatar { width: 35px; height: 35px; border-radius: 8px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .content { padding: 12px 18px; border-radius: 12px; background: rgba(255,255,255,0.05); line-height: 1.6; }
+
 .user-message { align-self: flex-end; flex-direction: row-reverse; }
 .user-message .content { background: #6c5ce7; }
+
+/* Error Message Style */
+.message.error .content {
+    background: rgba(255, 71, 87, 0.15);
+    border: 1px solid #ff4757;
+    color: #ff7675;
+}
+
 .message-img { max-width: 200px; border-radius: 8px; margin-bottom: 10px; display: block; border: 1px solid rgba(255,255,255,0.2); }
 
 /* Input Area */
@@ -115,14 +124,18 @@ input[type=range] { width: 100%; cursor: pointer; }
     display: flex; align-items: flex-end; gap: 10px; border: 1px solid rgba(255,255,255,0.1);
 }
 textarea { flex: 1; background: transparent; border: none; color: white; resize: none; outline: none; max-height: 120px; padding: 10px; font-size: 1rem; }
+
+/* Button & Upload Label Alignment */
 .attach-btn, #mic-btn, #send-btn, #stop-btn {
     background: transparent; border: none; color: #aaa; cursor: pointer; padding: 10px; border-radius: 8px; transition: 0.2s; font-size: 1.1rem;
+    display: inline-flex; justify-content: center; align-items: center;
 }
 .attach-btn:hover, #mic-btn:hover { color: white; background: rgba(255,255,255,0.1); }
 #send-btn { background: #6c5ce7; color: white; }
 #send-btn:hover { background: #5b4bc4; }
 #stop-btn { background: #ff4757; color: white; }
 .hidden { display: none !important; }
+
 #mic-btn.recording { color: #ff4757; animation: pulse 1s infinite; }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
 
@@ -163,17 +176,34 @@ textarea { flex: 1; background: transparent; border: none; color: white; resize:
 .form-header h2 { color: #2c3e50; margin-bottom: 5px; }
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #34495e; }
+
+/* Mandatory Asterisk */
+.required {
+    color: #ff4757;
+    margin-left: 4px;
+    font-weight: bold;
+}
+
 .form-group input, .form-group textarea {
     width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;
     font-size: 1rem; background: white; color: #333;
 }
+.form-group input:focus, .form-group textarea:focus {
+    border-color: #6c5ce7;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
 .row { display: flex; gap: 20px; }
 .row .form-group { flex: 1; }
+
 .submit-btn {
     width: 100%; padding: 14px; background: #27ae60; color: white; border: none;
     border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 10px;
+    transition: 0.2s;
 }
 .submit-btn:hover { background: #219150; }
+.submit-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
 
 .hidden-form { display: none; }
 .visible-form { display: block; animation: fadeIn 0.5s ease; }
@@ -204,3 +234,16 @@ textarea { flex: 1; background: transparent; border: none; color: white; resize:
 /* Code Blocks */
 pre { background: #1e1e1e; padding: 15px; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
 code { font-family: 'Consolas', monospace; color: #ccc; }
+
+/* Typing Indicator Animation */
+.typing-indicator span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: #aaa;
+    border-radius: 50%;
+    margin-right: 4px;
+    animation: typing 1s infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0%, 100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }

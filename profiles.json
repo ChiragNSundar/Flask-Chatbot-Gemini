@@ -1,0 +1,42 @@
+[
+    {
+        "full_name": "Chirag",
+        "email": "chiragns12@gmail.com",
+        "phone": "7022604698",
+        "experience_level": "Intern",
+        "job_title": "Data Scientist",
+        "skills": "React, Node, AWS",
+        "summary": "im good",
+        "submitted_at": "2025-12-03T10:39:00.342889"
+    },
+    {
+        "full_name": "H Smith",
+        "email": "haydensmith@email.com",
+        "phone": "04501 123 456",
+        "experience_level": "Entry-Level",
+        "job_title": "Customer service",
+        "skills": "Customer service,Numeracy,Communication,Teamwork,Organisation,Problem-solving,Cash handling,Sports knowledge",
+        "summary": "Year 11 student seeking casual or part-time customer service work in a sports retail environment. Played soccer for nine years and a keen all-round sports enthusiast. Contributed knowledge and communication skills.",
+        "submitted_at": "2025-12-03T10:44:47.744287"
+    },
+    {
+        "full_name": "haris",
+        "email": "harish@gmail.com",
+        "phone": "1234567890",
+        "experience_level": "Lead",
+        "job_title": "Product Manager",
+        "skills": "React, Node, AWS",
+        "summary": "Highly analytical and results-driven Product Manager with 5+ years of experience in the software development lifecycle, specializing in building and launching user-centric web applications. Proven ability to define product strategy, prioritize features, and lead cross-functional teams to deliver successful products using Agile methodologies. Proficient in leveraging technologies such as React, Node.js, and AWS to build scalable and high-performance solutions. Successfully launched <Specific Project> at <Company Name>, resulting in a 20% increase in user engagement. Passionate about innovation and translating customer needs into impactful product features.",
+        "submitted_at": "2025-12-03T10:57:45.245110"
+    },
+    {
+        "full_name": "anee",
+        "email": "anee@gmail.com",
+        "phone": "8901234555",
+        "experience_level": "Lead",
+        "job_title": "ui ux dev",
+        "skills": "React, Node, AWS",
+        "summary": "Proficient UI/UX Developer with 3+ years of experience in designing, developing, and implementing web applications using React, Node.js, and AWS. Strong understanding of UI/UX principles, including user research, wireframing, prototyping, and usability testing. Adept at building scalable and maintainable code, adhering to best practices and industry standards. Collaborative team player with experience working in agile environments at <Company Name> on projects such as <Specific Project>. Seeking a challenging role where I can leverage my technical skills and contribute to innovative product development.",
+        "submitted_at": "2025-12-03T11:02:38.645677"
+    }
+]

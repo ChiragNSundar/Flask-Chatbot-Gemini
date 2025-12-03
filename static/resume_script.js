@@ -4,6 +4,7 @@ const suggestionArea = document.getElementById('suggestion-area');
 const finalForm = document.getElementById('final-form');
 const formPlaceholder = document.getElementById('form-placeholder');
 const successModal = document.getElementById('success-modal');
+const resumeUpload = document.getElementById('resume-upload');
 
 let currentStep = -1;
 let collectedData = {};
@@ -12,11 +13,54 @@ document.addEventListener('DOMContentLoaded', () => {
     sendResumeMessage(true);
 });
 
-function sendResumeMessage(isInit = false) {
-    const text = isInit ? '' : userInput.value.trim();
-    if (!isInit && !text) return;
+resumeUpload.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        uploadResume(file);
+    }
+});
 
-    if (!isInit) {
+function uploadResume(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    appendMessage(`Uploading: ${file.name}...`, 'user-message');
+    const loadingId = showTypingIndicator();
+
+    fetch('/api/upload-resume', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        removeMessage(loadingId);
+        if (data.error) {
+            appendMessage(`⚠️ ${data.error}`, 'bot-message error');
+        } else {
+            collectedData = { ...collectedData, ...data.data };
+            updateLiveForm(collectedData);
+
+            if (Object.keys(collectedData).length > 0) {
+                formPlaceholder.style.display = 'none';
+                finalForm.classList.remove('hidden-form');
+                finalForm.classList.add('visible-form');
+            }
+
+            appendMessage(`✅ ${data.message}`, 'bot-message');
+            sendResumeMessage(false, true);
+        }
+    })
+    .catch(err => {
+        removeMessage(loadingId);
+        appendMessage('Error uploading file.', 'bot-message error');
+    });
+}
+
+function sendResumeMessage(isInit = false, silentCheck = false) {
+    const text = isInit || silentCheck ? '' : userInput.value.trim();
+    if (!isInit && !silentCheck && !text) return;
+
+    if (!isInit && !silentCheck) {
         appendMessage(text, 'user-message');
         userInput.value = '';
         suggestionArea.innerHTML = '';
@@ -40,28 +84,32 @@ function sendResumeMessage(isInit = false) {
         if (data.error) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
-            if (data.response) {
+            if (data.response && data.response.trim() !== "") {
                 appendMessage(data.response, 'bot-message');
             }
 
-            // FIX: Only update step if backend says so (handles "keep_step" for generation)
             if (data.next_step !== undefined && !data.keep_step) {
                 currentStep = data.next_step;
             }
 
-            // FIX: Only update form if we are NOT in the middle of generating options
             if (data.data && !data.keep_step) {
                 collectedData = data.data;
                 updateLiveForm(collectedData);
+                if (Object.keys(collectedData).length > 0) {
+                    formPlaceholder.style.display = 'none';
+                    finalForm.classList.remove('hidden-form');
+                    finalForm.classList.add('visible-form');
+                }
+            }
+
+            if (data.suggestions && data.suggestions.length > 0) {
+                renderSuggestions(data.suggestions);
             }
 
             if (data.question) {
                 setTimeout(() => {
                     appendMessage(data.question, 'bot-message', true);
-                    if (data.suggestions && data.suggestions.length > 0) {
-                        renderSuggestions(data.suggestions);
-                    }
-                }, 500);
+                }, 300);
             }
 
             if (data.finished) {
@@ -81,8 +129,16 @@ function renderSuggestions(suggestions) {
         chip.title = text; // Show full text on hover
 
         chip.onclick = () => {
-            // When clicked, put the FULL text into input and send
-            userInput.value = text;
+            // --- FIX: Remove leading heading/numbering before setting input ---
+            let cleanText = text.replace(/^\s*(\*\*Resume Summary \d+:\*\*|\d+\.\s*|Option \d+:\s*|\*\*\s*|\s*\*\*)/i, '').trim();
+
+            // If the cleaning removed everything, use the original text as a fallback
+            if (cleanText.length === 0) {
+                cleanText = text.trim();
+            }
+
+            userInput.value = cleanText;
+            // ------------------------------------------------------------------
             sendResumeMessage();
         };
         suggestionArea.appendChild(chip);
@@ -107,14 +163,28 @@ function showFinalForm() {
 
 function submitFinalForm() {
     const finalData = {
-        full_name: document.getElementById('form-full_name').value,
-        email: document.getElementById('form-email').value,
-        phone: document.getElementById('form-phone').value,
-        experience: document.getElementById('form-experience_level').value,
-        job: document.getElementById('form-job_title').value,
-        skills: document.getElementById('form-skills').value,
-        summary: document.getElementById('form-summary').value
+        full_name: document.getElementById('form-full_name').value.trim(),
+        email: document.getElementById('form-email').value.trim(),
+        phone: document.getElementById('form-phone').value.trim(),
+        experience_level: document.getElementById('form-experience_level').value.trim(),
+        job_title: document.getElementById('form-job_title').value.trim(),
+        skills: document.getElementById('form-skills').value.trim(),
+        summary: document.getElementById('form-summary').value.trim()
     };
+
+    const emptyFields = [];
+    if (!finalData.full_name) emptyFields.push("Full Name");
+    if (!finalData.email) emptyFields.push("Email");
+    if (!finalData.phone) emptyFields.push("Phone");
+    if (!finalData.experience_level) emptyFields.push("Experience");
+    if (!finalData.job_title) emptyFields.push("Job Title");
+    if (!finalData.skills) emptyFields.push("Skills");
+    if (!finalData.summary) emptyFields.push("Summary");
+
+    if (emptyFields.length > 0) {
+        alert("Please complete the following mandatory fields before submitting:\n\n- " + emptyFields.join("\n- "));
+        return;
+    }
 
     fetch('/api/submit-resume', {
         method: 'POST',
@@ -123,7 +193,11 @@ function submitFinalForm() {
     })
     .then(res => res.json())
     .then(data => {
-        successModal.classList.remove('hidden');
+        if(data.status === 'success') {
+            successModal.classList.remove('hidden');
+        } else {
+            alert("Error saving profile: " + (data.error || "Unknown error"));
+        }
     });
 }
 
