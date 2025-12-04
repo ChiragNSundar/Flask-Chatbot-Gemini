@@ -15,6 +15,7 @@
         <div class="blob blob-2"></div>
     </div>
 
+    <!-- Top Navigation -->
     <nav class="top-nav">
         <div class="logo-container">
             <i class="fa-solid fa-briefcase gradient-icon"></i>
@@ -26,8 +27,10 @@
         </div>
     </nav>
 
+    <!-- Resume Builder Layout -->
     <div class="resume-layout">
-        <!-- Left: Chat -->
+
+        <!-- Left: Chat Interface -->
         <div class="resume-chat-container">
             <div class="chat-header">
                 <span><i class="fa-solid fa-robot"></i> AI Interviewer</span>
@@ -36,7 +39,10 @@
                     <i class="fa-solid fa-trash"></i> Start New Profile
                 </button>
             </div>
+
             <div id="chat-box" class="chat-box"></div>
+
+            <!-- Suggestion Chips Area -->
             <div id="suggestion-area" class="suggestion-area"></div>
 
             <div class="input-area">
@@ -52,7 +58,7 @@
             </div>
         </div>
 
-        <!-- Right: Form -->
+        <!-- Right: Candidate Profile Form -->
         <div class="resume-form-container">
             <div class="form-header">
                 <h2><i class="fa-solid fa-id-card"></i> Candidate Profile</h2>
@@ -69,6 +75,7 @@
                     <label>Full Name <span class="required">*</span></label>
                     <input type="text" id="form-full_name" placeholder="John Doe">
                 </div>
+
                 <div class="row">
                     <div class="form-group">
                         <label>Email <span class="required">*</span></label>
@@ -79,29 +86,40 @@
                         <input type="text" id="form-phone" placeholder="1234567890">
                     </div>
                 </div>
+
                 <div class="row">
                     <div class="form-group">
                         <label>Experience <span class="required">*</span></label>
-                        <input type="text" id="form-experience_level" placeholder="Entry Level">
+                        <input type="text" id="form-experience_level" placeholder="Entry Level, Senior...">
                     </div>
+                    <!-- NEW FIELD: DOMAIN -->
                     <div class="form-group">
-                        <label>Job Title <span class="required">*</span></label>
-                        <input type="text" id="form-job_title" placeholder="Software Engineer">
+                        <label>Domain/Industry <span class="required">*</span></label>
+                        <input type="text" id="form-domain" placeholder="Software, Finance, Healthcare...">
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label>Job Title <span class="required">*</span></label>
+                    <input type="text" id="form-job_title" placeholder="Software Engineer">
+                </div>
+
                 <div class="form-group">
                     <label>Skills <span class="required">*</span></label>
-                    <input type="text" id="form-skills" placeholder="Python, React, etc.">
+                    <input type="text" id="form-skills" placeholder="Python, React, Project Management...">
                 </div>
+
                 <div class="form-group">
                     <label>Summary <span class="required">*</span></label>
                     <textarea id="form-summary" rows="4" placeholder="Brief professional summary..."></textarea>
                 </div>
+
                 <button type="button" onclick="submitFinalForm()" class="submit-btn">Submit Profile</button>
             </form>
         </div>
     </div>
 
+    <!-- Success Modal -->
     <div id="success-modal" class="modal hidden">
         <div class="modal-content">
             <i class="fa-solid fa-circle-check success-icon"></i>

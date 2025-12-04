@@ -8,40 +8,35 @@ const resumeUpload = document.getElementById('resume-upload');
 
 let currentStep = -1;
 let collectedData = {};
-let resumeSessionId = null; // Unique ID for logging this resume session
+let resumeSessionId = null;
 
-// --- RESUME STEPS (Mirroring Python for client-side logic) ---
+// Make sure this matches Python RESUME_STEPS exactly
 const RESUME_STEPS = [
-    { field: "full_name", type: "text" },
-    { field: "email", type: "email" },
-    { field: "phone", type: "phone" },
-    { field: "experience_level", type: "selection", suggestions: ["Intern", "Entry Level", "Mid Level", "Senior", "Lead"] },
-    { field: "job_title", type: "text" },
-    { field: "skills", type: "text" },
-    { field: "summary", type: "long_text" },
-    { field: "critique", type: "final" }
+    { field: "full_name" },
+    { field: "email" },
+    { field: "phone" },
+    { field: "experience_level" },
+    { field: "domain" },
+    { field: "job_title" },
+    { field: "skills" }, // Index 6
+    { field: "summary" }, // Index 7
+    { field: "critique" }
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Local Storage Persistence
     const savedData = localStorage.getItem('resumeData');
     const savedSessionId = localStorage.getItem('resumeSessionId');
 
     if (savedData) {
         collectedData = JSON.parse(savedData);
         updateLiveForm(collectedData);
-        if (Object.keys(collectedData).length > 0) {
-            showForm();
-        }
-        if (savedSessionId) {
-            resumeSessionId = savedSessionId;
-        }
+        if (Object.keys(collectedData).length > 0) showForm();
+        if (savedSessionId) resumeSessionId = savedSessionId;
         sendResumeMessage(false, true);
     } else {
         sendResumeMessage(true);
     }
 
-    // 2. Two-Way Data Binding (Listen to form changes)
     finalForm.querySelectorAll('input, textarea').forEach(field => {
         field.addEventListener('input', function() {
             const fieldName = this.id.replace('form-', '');
@@ -51,8 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
-
-// --- CORE CHAT LOGIC ---
 
 function sendResumeMessage(isInit = false, silentCheck = false) {
     const text = isInit || silentCheck ? '' : userInput.value.trim();
@@ -73,7 +66,7 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
             message: text,
             step: currentStep,
             data: collectedData,
-            session_id: resumeSessionId // Send current session ID
+            session_id: resumeSessionId
         })
     })
     .then(res => res.json())
@@ -83,7 +76,6 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
         if (data.error) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
-            // Update and save session ID
             if (data.session_id && data.session_id !== resumeSessionId) {
                 resumeSessionId = data.session_id;
                 localStorage.setItem('resumeSessionId', resumeSessionId);
@@ -101,13 +93,13 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
                 collectedData = data.data;
                 updateLiveForm(collectedData);
                 localStorage.setItem('resumeData', JSON.stringify(collectedData));
-                if (Object.keys(collectedData).length > 0) {
-                    showForm();
-                }
+                if (Object.keys(collectedData).length > 0) showForm();
             }
 
+            // Pass field name to renderer
             if (data.suggestions && data.suggestions.length > 0) {
-                renderSuggestions(data.suggestions);
+                const stepField = RESUME_STEPS[currentStep] ? RESUME_STEPS[currentStep].field : 'unknown';
+                renderSuggestions(data.suggestions, stepField);
             }
 
             if (data.question) {
@@ -118,12 +110,65 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
 
             if (data.finished) {
                 showFinalForm();
+                disableChatInput(); // Disable input on natural finish
             }
         }
     });
 }
 
-// --- UTILITY FUNCTIONS ---
+function disableChatInput() {
+    userInput.disabled = true;
+    userInput.placeholder = "Interview Complete. Please Submit.";
+    suggestionArea.innerHTML = '';
+}
+
+function renderSuggestions(suggestions, currentFieldName) {
+    suggestionArea.innerHTML = '';
+
+    suggestions.forEach(text => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerText = text.length > 50 ? text.substring(0, 50) + "..." : text;
+        chip.title = text;
+
+        chip.onclick = () => {
+            // COMMANDS: Auto-send
+            if (['Generate Options', 'Show Example', 'Suggest Skills', 'Critique', 'Submit'].includes(text)) {
+                userInput.value = text;
+                sendResumeMessage();
+                return;
+            }
+
+            // SKILLS: Multi-Select (No Auto-Send)
+            if (currentFieldName === 'skills') {
+                chip.classList.toggle('selected');
+
+                let currentVal = userInput.value.trim();
+                let selectedSkill = text.trim();
+
+                if (chip.classList.contains('selected')) {
+                    if (currentVal.length > 0 && !currentVal.endsWith(',')) {
+                        currentVal += ', ';
+                    }
+                    userInput.value = currentVal + selectedSkill;
+                }
+                userInput.focus();
+            }
+            // SUMMARY RESULTS: Auto-Send (CHANGED per request)
+            else if (currentFieldName === 'summary') {
+                let cleanText = text.replace(/^[\s\W]*(?:Option|Summary)\s*\d*[:\.]\s*/i, '').trim();
+                userInput.value = cleanText;
+                sendResumeMessage(); // Auto-send triggered
+            }
+            // DEFAULT: Single Select (Auto-Send)
+            else {
+                userInput.value = text;
+                sendResumeMessage();
+            }
+        };
+        suggestionArea.appendChild(chip);
+    });
+}
 
 function uploadResume(file) {
     const formData = new FormData();
@@ -145,11 +190,7 @@ function uploadResume(file) {
             collectedData = { ...collectedData, ...data.data };
             updateLiveForm(collectedData);
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
-
-            if (Object.keys(collectedData).length > 0) {
-                showForm();
-            }
-
+            if (Object.keys(collectedData).length > 0) showForm();
             appendMessage(`✅ ${data.message}`, 'bot-message');
             sendResumeMessage(false, true);
         }
@@ -162,37 +203,8 @@ function uploadResume(file) {
 
 resumeUpload.addEventListener('change', function() {
     const file = this.files[0];
-    if (file) {
-        uploadResume(file);
-    }
+    if (file) uploadResume(file);
 });
-
-
-function renderSuggestions(suggestions) {
-    suggestionArea.innerHTML = '';
-    suggestions.forEach(text => {
-        const chip = document.createElement('div');
-        chip.className = 'chip';
-        chip.innerText = text.length > 50 ? text.substring(0, 50) + "..." : text;
-        chip.title = text;
-
-        chip.onclick = () => {
-            // Robust Regex to remove headings like "Option 1:", "**Summary 1:**", "1. ", etc.
-            let cleanText = text.replace(
-                /^\s*(\*\*[^\*]+:\*\*|\*\*[^\*]+\*\*:\s*|Option\s*\d+\s*:|Summary\s*\d*\s*:|\d+\.\s*|\*\s*)/i,
-                ''
-            ).trim();
-
-            if (cleanText.length === 0) {
-                cleanText = text.trim();
-            }
-
-            userInput.value = cleanText;
-            sendResumeMessage();
-        };
-        suggestionArea.appendChild(chip);
-    });
-}
 
 function updateLiveForm(data) {
     for (const [key, value] of Object.entries(data)) {
@@ -210,8 +222,6 @@ function showForm() {
 function showFinalForm() {
     showForm();
     suggestionArea.innerHTML = '';
-    userInput.disabled = true;
-    userInput.placeholder = "Interview complete.";
 }
 
 function submitFinalForm() {
@@ -220,10 +230,10 @@ function submitFinalForm() {
         email: document.getElementById('form-email').value.trim(),
         phone: document.getElementById('form-phone').value.trim(),
         experience_level: document.getElementById('form-experience_level').value.trim(),
+        domain: collectedData.domain || document.getElementById('form-domain').value.trim(),
         job_title: document.getElementById('form-job_title').value.trim(),
         skills: document.getElementById('form-skills').value.trim(),
         summary: document.getElementById('form-summary').value.trim(),
-        // Send session ID for MongoDB correlation
         resume_session_id: resumeSessionId
     };
 
@@ -237,7 +247,7 @@ function submitFinalForm() {
     if (!finalData.summary) emptyFields.push("Summary");
 
     if (emptyFields.length > 0) {
-        alert("Please complete the following mandatory fields before submitting:\n\n- " + emptyFields.join("\n- "));
+        alert("Please complete mandatory fields:\n\n- " + emptyFields.join("\n- "));
         return;
     }
 
@@ -252,6 +262,7 @@ function submitFinalForm() {
             localStorage.removeItem('resumeData');
             localStorage.removeItem('resumeSessionId');
             successModal.classList.remove('hidden');
+            disableChatInput(); // Disable chat input on manual submit
         } else {
             alert("Error saving profile: " + (data.error || "Unknown error"));
         }
@@ -297,7 +308,7 @@ function removeMessage(id) {
 }
 
 function clearProfile() {
-    if (confirm("Are you sure you want to clear your current profile and start over?")) {
+    if (confirm("Clear profile and start over?")) {
         localStorage.removeItem('resumeData');
         localStorage.removeItem('resumeSessionId');
         window.location.reload();

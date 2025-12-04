@@ -13,7 +13,7 @@ import google.generativeai as genai
 
 # --- MongoDB Imports ---
 from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure  # CORRECTED: Changed ConnectionError to ConnectionFailure
+from pymongo.errors import ConnectionFailure
 from bson.objectid import ObjectId
 
 # -----------------------
@@ -30,9 +30,8 @@ app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'chat_history.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-# ----------------------------------------------------
 
-# --- MongoDB Configuration (For Resume Submissions & Logging) ---
+# --- MongoDB Configuration ---
 MONGO_URI = "mongodb://localhost:27017/"
 DB_NAME = "main_db"
 
@@ -41,8 +40,7 @@ mongo_profile_collection = None
 mongo_chat_collection = None
 
 try:
-    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # 5 second timeout
-    # The ismaster command is cheap and does not require auth.
+    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.admin.command('ismaster')
 
     mongo_db = mongo_client[DB_NAME]
@@ -50,13 +48,12 @@ try:
     mongo_chat_collection = mongo_db["ai_chat"]
     print("MongoDB connection successful.")
 
-except ConnectionFailure as e:  # CORRECTED: Catching ConnectionFailure
-    print(f"ERROR: Could not connect to MongoDB at {MONGO_URI}. Resume submissions will fail. Details: {e}")
+except ConnectionFailure as e:
+    print(f"ERROR: MongoDB Connection Failed. {e}")
     mongo_client = None
 except Exception as e:
-    print(f"An unexpected error occurred during MongoDB setup: {e}")
+    print(f"MongoDB Error: {e}")
     mongo_client = None
-# ----------------------------------------------------
 
 # Gemini Config
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -67,7 +64,7 @@ else:
     model = None
 
 
-# --- MODELS (SQLAlchemy) ---
+# --- MODELS ---
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), default="New Chat")
@@ -98,10 +95,13 @@ RESUME_STEPS = [
      "suggestions": []},
     {"field": "experience_level", "question": "What is your **Experience Level**?", "mandatory": True,
      "type": "selection", "suggestions": ["Intern", "Entry Level", "Mid Level", "Senior", "Lead"]},
-    {"field": "job_title", "question": "Target **Job Title**?", "mandatory": True, "type": "text",
-     "suggestions": ["Data Scientist", "Full Stack Dev", "Product Manager"]},
+    {"field": "domain",
+     "question": "Which **Industry or Domain** are you interested in? (e.g., Software, Finance, Healthcare)",
+     "mandatory": True, "type": "text",
+     "suggestions": ["Software Development", "Data Science", "Finance", "Marketing"]},
+    {"field": "job_title", "question": "Target **Job Title**?", "mandatory": True, "type": "text", "suggestions": []},
     {"field": "skills", "question": "Top 3-5 **Skills**? (Type 'Suggest Skills' for AI help)", "mandatory": True,
-     "type": "text", "suggestions": ["Python, SQL, ML", "React, Node, AWS", "Suggest Skills"]},
+     "type": "text", "suggestions": []},
     {"field": "summary", "question": "Professional **Summary**? (Type 'Generate' to see options, or type your own)",
      "mandatory": True, "type": "long_text", "suggestions": ["Generate Options", "Show Example"]},
     {"field": "critique",
@@ -121,23 +121,51 @@ def find_next_step(current_data):
     return -1
 
 
-# Helper function to log resume chat
-def log_resume_chat(session_id, role, content, step_index, collected_data):
-    if mongo_client is None: return  # Skip logging if connection failed
+# --- LOGGING ---
+def log_resume_interaction(session_id, user_text, ai_text, step_index, collected_data):
+    if mongo_client is None: return
+    if not ObjectId.is_valid(session_id): return
 
-    if not ObjectId.is_valid(session_id):
-        print(f"Invalid session ID for logging: {session_id}")
-        return
+    oid = ObjectId(session_id)
 
-    log_entry = {
-        'session_id': ObjectId(session_id),
+    interaction = {
         'timestamp': datetime.utcnow(),
-        'role': role,
-        'content': content,
-        'step': step_index,
-        'data_snapshot': collected_data
+        'step_index': step_index,
+        'user_said': user_text,
+        'ai_replied': ai_text,
+        'snapshot': collected_data
     }
-    mongo_chat_collection.insert_one(log_entry)
+
+    mongo_chat_collection.update_one(
+        {'_id': oid},
+        {
+            '$push': {'interactions': interaction},
+            '$setOnInsert': {'created_at': datetime.utcnow()}
+        },
+        upsert=True
+    )
+
+
+# --- DYNAMIC SUGGESTIONS ---
+def get_dynamic_suggestions(field, data):
+    try:
+        if field == "job_title":
+            exp = data.get("experience_level", "Entry Level")
+            dom = data.get("domain", "General")
+            prompt = f"List 3 standard job titles for a '{exp}' professional in the '{dom}' industry. Output ONLY the titles separated by commas."
+            response = model.generate_content(prompt)
+            return [s.strip() for s in response.text.split(',') if s.strip()][:3]
+
+        if field == "skills":
+            job = data.get("job_title", "Professional")
+            prompt = f"List 6 distinct, single technical or soft skills (e.g. Python, SQL, Communication) suitable for a '{job}'. Output ONLY the skills separated by commas."
+            response = model.generate_content(prompt)
+            return [s.strip() for s in response.text.split(',') if s.strip()][:6]
+
+    except Exception as e:
+        print(f"Suggestion Error: {e}")
+        return []
+    return []
 
 
 # --- ROUTES ---
@@ -149,7 +177,7 @@ def home(): return render_template('chat.html')
 def resume_page(): return render_template('resume.html')
 
 
-# Chatbot API (Uses SQLAlchemy)
+# Chatbot API
 @app.route('/api/conversations', methods=['GET'])
 def get_conversations():
     chats = Conversation.query.order_by(Conversation.created_at.desc()).all()
@@ -270,32 +298,35 @@ def resume_chat():
     user_input = data.get('message', '').strip()
     collected_data = data.get('data', {})
     current_step_index = data.get('step', -1)
-    session_id = data.get('session_id', str(ObjectId()))
+    session_id = data.get('session_id')
+    if not session_id:
+        session_id = str(ObjectId())
 
-    # Log User Input
-    if user_input:
-        log_resume_chat(session_id, 'user', user_input, current_step_index, collected_data)
+    # 1. Handle Special Commands
+    if user_input.lower() == 'submit':
+        ai_text = "Interview complete! Please review your details on the right and click the green 'Submit Profile' button to finish."
+        log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+        return jsonify({'response': ai_text, 'finished': True, 'data': collected_data, 'session_id': session_id})
 
-    # 1. Handle Special Commands (Critique, Suggest Skills, Example)
     if user_input.lower() == 'critique' and collected_data.get('summary'):
         prompt = f"Critique the following resume profile for a {collected_data.get('job_title')}. Focus on the summary and skills. Profile: {collected_data}"
         try:
             ai_resp = model.generate_content(prompt)
-            log_resume_chat(session_id, 'model', ai_resp.text, current_step_index, collected_data)
-            return jsonify({'response': f"**AI Critique:**\n\n{ai_resp.text}", 'keep_step': True,
-                            'question': RESUME_STEPS[-1]['question'], 'suggestions': RESUME_STEPS[-1]['suggestions'],
-                            'session_id': session_id})
+            ai_text = f"**AI Critique:**\n\n{ai_resp.text}"
+            log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+            return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[-1]['question'],
+                            'suggestions': RESUME_STEPS[-1]['suggestions'], 'session_id': session_id})
         except:
-            return jsonify({'error': "Critique failed. Try again later.", 'keep_step': True, 'session_id': session_id})
+            return jsonify({'error': "Critique failed.", 'keep_step': True, 'session_id': session_id})
 
     if user_input.lower() == 'suggest skills' and collected_data.get('job_title'):
         prompt = f"Based on the job title '{collected_data.get('job_title')}' and existing skills '{collected_data.get('skills')}', suggest 3-5 highly relevant, modern skills that are missing. List them separated by a comma."
         try:
             ai_resp = model.generate_content(prompt)
-            log_resume_chat(session_id, 'model', ai_resp.text, current_step_index, collected_data)
-            return jsonify({'response': f"**Suggested Skills:**\n\n{ai_resp.text}", 'keep_step': True,
-                            'question': RESUME_STEPS[5]['question'], 'suggestions': RESUME_STEPS[5]['suggestions'],
-                            'session_id': session_id})
+            ai_text = f"**Suggested Skills:**\n\n{ai_resp.text}"
+            log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+            return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[5]['question'],
+                            'suggestions': RESUME_STEPS[5]['suggestions'], 'session_id': session_id})
         except:
             return jsonify({'error': "Skill suggestion failed.", 'keep_step': True, 'session_id': session_id})
 
@@ -303,86 +334,93 @@ def resume_chat():
         prompt = f"Provide a brief, strong example of a professional summary for a {collected_data.get('experience_level')} {collected_data.get('job_title')}."
         try:
             ai_resp = model.generate_content(prompt)
-            log_resume_chat(session_id, 'model', ai_resp.text, current_step_index, collected_data)
-            return jsonify({'response': f"**Example Summary:**\n\n{ai_resp.text}", 'keep_step': True,
-                            'question': RESUME_STEPS[6]['question'], 'suggestions': RESUME_STEPS[6]['suggestions'],
-                            'session_id': session_id})
+            ai_text = f"**Example Summary:**\n\n{ai_resp.text}"
+            log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+            return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[6]['question'],
+                            'suggestions': RESUME_STEPS[6]['suggestions'], 'session_id': session_id})
         except:
             return jsonify({'error': "Example generation failed.", 'keep_step': True, 'session_id': session_id})
 
-    # 2. Validation & Input Handling (for current step)
+    # 2. Validation & Input Handling
+    just_saved_summary = False
     if current_step_index != -1 and user_input:
         current_rule = RESUME_STEPS[current_step_index]
+        error_msg = None
 
         if current_rule['field'] == 'full_name':
             if any(char.isdigit() for char in user_input):
-                return jsonify({'error': "Name cannot contain numbers.", 'keep_step': True, 'session_id': session_id})
-            if len(user_input) < 2:
-                return jsonify({'error': "Name is too short. Please enter your full name.", 'keep_step': True,
-                                'session_id': session_id})
+                error_msg = "Name cannot contain numbers."
+            elif len(user_input) < 2:
+                error_msg = "Name is too short."
+        elif current_rule['type'] == 'email' and not re.match(r"[^@]+@[^@]+\.[^@]+", user_input):
+            error_msg = "Invalid email format."
+        elif current_rule['type'] == 'phone' and not re.search(r"\d{10}", user_input):
+            error_msg = "Invalid phone (10+ digits)."
 
-        if current_rule['type'] == 'email' and not re.match(r"[^@]+@[^@]+\.[^@]+", user_input):
-            return jsonify({'error': "Invalid email format.", 'keep_step': True, 'session_id': session_id})
+        if error_msg:
+            log_resume_interaction(session_id, user_input, error_msg, current_step_index, collected_data)
+            return jsonify({'error': error_msg, 'keep_step': True, 'session_id': session_id})
 
-        if current_rule['type'] == 'phone' and not re.search(r"\d{10}", user_input):
-            return jsonify({'error': "Invalid phone (10+ digits).", 'keep_step': True, 'session_id': session_id})
-
-        # Summary Generation Logic
         if current_rule['field'] == 'summary' and 'generate' in user_input.lower():
             try:
-                prompt = f"Write 2 distinct professional resume summaries (separated by |) for a {collected_data.get('job_title')} with skills {collected_data.get('skills')}. Use placeholders like <Company Name> or <Specific Project> for generic parts."
+                prompt = f"Write 2 distinct professional resume summaries for a {collected_data.get('job_title')} with skills {collected_data.get('skills')}. Return ONLY the summaries separated by '|||'. Do not include labels like 'Option 1'."
                 ai_resp = model.generate_content(prompt)
-                options = [opt.strip() for opt in ai_resp.text.split('|') if opt.strip()]
 
-                new_response = "Here are two summary options. Click on the one you prefer, then review it carefully. **Replace any generic text** (like <Company Name> or <Role>) with your specific details before submitting."
+                raw_text = ai_resp.text
+                options = [opt.strip() for opt in raw_text.split('|||') if opt.strip()]
 
-                log_resume_chat(session_id, 'model', new_response + " Options: " + str(options), current_step_index,
-                                collected_data)
+                ai_text = "Here are two summary options. Click one to auto-fill."
+                log_resume_interaction(session_id, user_input, ai_text + f" [Options: {options}]", current_step_index,
+                                       collected_data)
 
-                return jsonify({
-                    'response': new_response,
-                    'suggestions': options,
-                    'keep_step': True,
-                    'session_id': session_id
-                })
+                return jsonify(
+                    {'response': ai_text, 'suggestions': options, 'keep_step': True, 'session_id': session_id})
             except:
-                return jsonify({'error': "Generation failed. Please type your summary.", 'keep_step': True,
-                                'session_id': session_id})
+                return jsonify({'error': "Generation failed.", 'keep_step': True, 'session_id': session_id})
 
-        # Save Input
         collected_data[current_rule['field']] = user_input
+        if current_rule['field'] == 'summary':
+            just_saved_summary = True
 
     # 3. Determine Next Step
     next_step_index = find_next_step(collected_data)
 
-    # 4. Formulate Response
+    # 4. Formulate Response & Suggestions
     if next_step_index == -1:
-        response_text = "Profile complete! Please review and submit."
-        log_resume_chat(session_id, 'model', response_text, current_step_index, collected_data)
-        return jsonify({'response': response_text, 'finished': True, 'data': collected_data, 'session_id': session_id})
+        ai_text = "Profile complete! Please review and submit."
+        if just_saved_summary:
+            ai_text = "I've updated your summary. Please review it for any placeholders.\n\n" + ai_text
+
+        log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+        return jsonify({'response': ai_text, 'finished': True, 'data': collected_data, 'session_id': session_id})
 
     next_rule = RESUME_STEPS[next_step_index]
+    ai_text = next_rule['question']
 
-    response_text = ""
+    # Prepend warning if summary was just saved
+    if just_saved_summary:
+        ai_text = "I've updated your summary. Please review it for any placeholders.\n\n" + ai_text
+
+    dynamic_suggestions = next_rule['suggestions']
+    if next_rule['field'] in ['job_title', 'skills']:
+        generated = get_dynamic_suggestions(next_rule['field'], collected_data)
+        if generated: dynamic_suggestions = generated
+
+    ui_response_text = ""
     if current_step_index == -1 and not user_input:
-        # Acknowledge Resuming Session
         if collected_data.get('full_name'):
-            response_text = f"Welcome back, **{collected_data['full_name']}**! Resuming your profile."
+            ai_text = f"Welcome back, **{collected_data['full_name']}**! Resuming your profile. " + ai_text
         else:
-            response_text = "Hello! Let's build your resume."
+            ai_text = "Hello! Let's build your resume. " + ai_text
+        ui_response_text = ai_text
 
-        # Log the initial welcome/resuming message
-        log_resume_chat(session_id, 'model', response_text, current_step_index, collected_data)
-
-    # Log the AI Question (only if it's not the initial message, as that was logged above)
-    if current_step_index != -1 or user_input:
-        log_resume_chat(session_id, 'model', next_rule['question'], next_step_index, collected_data)
+    log_resume_interaction(session_id, user_input, ai_text, next_step_index, collected_data)
 
     return jsonify({
-        'response': response_text,
+        'response': ui_response_text,
         'next_step': next_step_index,
         'question': next_rule['question'],
-        'suggestions': next_rule['suggestions'],
+        'suggestions': dynamic_suggestions,
         'data': collected_data,
         'session_id': session_id
     })
@@ -391,40 +429,25 @@ def resume_chat():
 @app.route('/api/submit-resume', methods=['POST'])
 def submit_resume():
     if mongo_client is None:
-        return jsonify({'error': 'MongoDB connection failed. Cannot submit profile.'}), 500
+        return jsonify({'error': 'MongoDB connection failed.'}), 500
 
     try:
         new_profile = request.json
-        if not new_profile:
-            return jsonify({'error': 'No data provided'}), 400
-
-        required_fields = ["full_name", "email", "phone", "experience_level", "job_title", "skills", "summary"]
-        missing = [field for field in required_fields if not new_profile.get(field)]
-
-        if missing:
-            return jsonify({'error': f"Missing mandatory fields: {', '.join(missing)}"}), 400
-
-        # --- MongoDB Submission to profile_resume collection ---
-
-        # 1. Prepare data for MongoDB
         session_id_str = new_profile.pop('resume_session_id', None)
 
         if session_id_str and ObjectId.is_valid(session_id_str):
-            new_profile['chat_session_id'] = ObjectId(session_id_str)  # Link to chat log
+            new_profile['chat_session_id'] = ObjectId(session_id_str)
         else:
-            new_profile['chat_session_id'] = None  # Store None if invalid
+            new_profile['chat_session_id'] = None
 
         new_profile['submitted_at'] = datetime.utcnow()
-
-        # 2. Insert into the profile_resume collection
         mongo_profile_collection.insert_one(new_profile)
-        # -----------------------------------------------------
 
         return jsonify({'status': 'success', 'message': 'Profile saved to MongoDB'})
 
     except Exception as e:
-        print(f"Error saving profile to MongoDB: {e}")
-        return jsonify({'error': 'Internal Server Error while saving to MongoDB'}), 500
+        print(f"Error: {e}")
+        return jsonify({'error': 'Error saving to MongoDB'}), 500
 
 
 if __name__ == '__main__':
