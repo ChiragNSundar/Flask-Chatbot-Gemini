@@ -1,7 +1,7 @@
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const suggestionArea = document.getElementById('suggestion-area');
-const finalForm = document.getElementById('final-form');
+const finalForm = document.getElementById('final-form'); // Target the form
 const formPlaceholder = document.getElementById('form-placeholder');
 const successModal = document.getElementById('success-modal');
 const resumeUpload = document.getElementById('resume-upload');
@@ -27,7 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedData) {
         collectedData = JSON.parse(savedData);
         updateLiveForm(collectedData);
-        // Find the next step based on loaded data
+        // FIX: Ensure form is visible on load if data exists
+        if (Object.keys(collectedData).length > 0) {
+            showForm();
+        }
         sendResumeMessage(false, true);
     } else {
         sendResumeMessage(true);
@@ -39,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const fieldName = this.id.replace('form-', '');
             collectedData[fieldName] = this.value.trim();
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
+            // FIX: Ensure form is visible when user manually types
+            showForm();
         });
     });
 });
@@ -74,7 +79,7 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
             if (data.response && data.response.trim() !== "") {
-                appendMessage(data.response, 'bot-message', true); // Use markdown for welcome back message
+                appendMessage(data.response, 'bot-message', true);
             }
 
             if (data.next_step !== undefined && !data.keep_step) {
@@ -85,9 +90,12 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
                 collectedData = data.data;
                 updateLiveForm(collectedData);
                 localStorage.setItem('resumeData', JSON.stringify(collectedData));
+                // FIX: Ensure form is visible when data is updated by AI
+                if (Object.keys(collectedData).length > 0) {
+                    showForm();
+                }
             }
 
-            // Render suggestions/chips immediately
             if (data.suggestions && data.suggestions.length > 0) {
                 renderSuggestions(data.suggestions);
             }
@@ -129,9 +137,7 @@ function uploadResume(file) {
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
 
             if (Object.keys(collectedData).length > 0) {
-                formPlaceholder.style.display = 'none';
-                finalForm.classList.remove('hidden-form');
-                finalForm.classList.add('visible-form');
+                showForm(); // FIX: Show form after PDF upload
             }
 
             appendMessage(`✅ ${data.message}`, 'bot-message');
@@ -161,7 +167,6 @@ function renderSuggestions(suggestions) {
         chip.title = text;
 
         chip.onclick = () => {
-            // Robust Regex to remove headings like "Option 1:", "**Summary 1:**", "1. ", etc.
             let cleanText = text.replace(
                 /^\s*(\*\*[^\*]+:\*\*|\*\*[^\*]+\*\*:\s*|Option\s*\d+\s*:|Summary\s*\d*\s*:|\d+\.\s*|\*\s*)/i,
                 ''
@@ -186,10 +191,15 @@ function updateLiveForm(data) {
     }
 }
 
-function showFinalForm() {
-    formPlaceholder.style.display = 'none';
+// NEW FUNCTION: To make the form visible
+function showForm() {
+    formPlaceholder.classList.add('hidden');
     finalForm.classList.remove('hidden-form');
     finalForm.classList.add('visible-form');
+}
+
+function showFinalForm() {
+    showForm(); // Ensure form is visible
     suggestionArea.innerHTML = '';
     userInput.disabled = true;
     userInput.placeholder = "Interview complete.";
@@ -274,7 +284,7 @@ function removeMessage(id) {
     if (el) el.remove();
 }
 
-// --- NEW: Clear Profile Function ---
+// Clear Profile Function (exposed globally via onclick in HTML)
 function clearProfile() {
     if (confirm("Are you sure you want to clear your current profile and start over?")) {
         localStorage.removeItem('resumeData');

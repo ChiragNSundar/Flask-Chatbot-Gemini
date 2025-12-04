@@ -48,5 +48,15 @@
         "skills": "Customer service,Numeracy skills,Communication skills,Teamwork,Organisation skills,Problem solving",
         "summary": "Reliable hard working Year 11 student seeking casual or part-time customer service work in a sports retail environment. Having played soccer for nine years and a keen all-round sports enthusiast, looking to contribute knowledge and proven communications skills.",
         "submitted_at": "2025-12-03T11:48:36.486317"
+    },
+    {
+        "full_name": "chirag",
+        "email": "chiragns12@gmail.com",
+        "phone": "7022604698",
+        "experience_level": "Senior",
+        "job_title": "Full Stack Dev",
+        "skills": "React, Node, AWS",
+        "summary": "Highly motivated and results-oriented Full Stack Developer with 5+ years of experience building and deploying scalable web applications using React, Node.js, and AWS. Proven ability to translate business requirements into functional and efficient code, contributing significantly to project success at <Company Name>. Expertise in designing RESTful APIs, implementing CI/CD pipelines, and optimizing application performance for optimal user experience. Seeking a challenging role at a forward-thinking organization where I can leverage my skills and experience to drive innovation and deliver impactful solutions, like the <Specific Project> project where I reduced latency by 20%.",
+        "submitted_at": "2025-12-04T06:23:51.486982"
     }
 ]
