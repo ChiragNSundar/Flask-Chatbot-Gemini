@@ -162,19 +162,58 @@ function renderSuggestions(suggestions, currentFieldName) {
     });
 }
 
+// --- UPDATED PDF EXPORT ---
 function downloadPDF() {
-    document.getElementById('tpl-name').innerText = document.getElementById('form-full_name').value || "YOUR NAME";
+    // 1. Validation Logic
+    const requiredIds = ['form-full_name', 'form-email', 'form-phone', 'form-job_title', 'form-skills', 'form-summary'];
+    let missing = [];
+
+    requiredIds.forEach(id => {
+        const val = document.getElementById(id).value.trim();
+        if (!val) missing.push(id.replace('form-', '').replace('_', ' '));
+    });
+
+    if (missing.length > 0) {
+        return alert(`Cannot download PDF.\nPlease fill: ${missing.join(', ')}`);
+    }
+
+    // 2. Populate Template
+    document.getElementById('tpl-name').innerText = document.getElementById('form-full_name').value;
     document.getElementById('tpl-email').innerText = document.getElementById('form-email').value;
     document.getElementById('tpl-phone').innerText = document.getElementById('form-phone').value;
+    document.getElementById('tpl-location').innerText = "Open to Remote/Relocation";
     document.getElementById('tpl-job').innerText = document.getElementById('form-job_title').value;
     document.getElementById('tpl-summary').innerText = document.getElementById('form-summary').value;
-    document.getElementById('tpl-skills').innerText = document.getElementById('form-skills').value;
     document.getElementById('tpl-exp').innerText = document.getElementById('form-experience_level').value;
-    document.getElementById('tpl-domain').innerText = document.getElementById('form-domain').value;
+    document.getElementById('tpl-domain').innerText = document.getElementById('form-domain').value || "General";
 
+    // 3. Populate Skills Grid
+    const skillsText = document.getElementById('form-skills').value;
+    const skillsContainer = document.getElementById('tpl-skills-container');
+    skillsContainer.innerHTML = '';
+    if (skillsText) {
+        skillsText.split(',').forEach(s => {
+            if(s.trim()) {
+                const span = document.createElement('span');
+                span.className = 'resume-skill-item';
+                span.innerText = s.trim();
+                skillsContainer.appendChild(span);
+            }
+        });
+    }
+
+    // 4. Render
     const element = document.getElementById('resume-template');
     element.style.display = 'block';
-    const opt = { margin: 0.5, filename: 'Professional_Resume.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' } };
+
+    const opt = {
+        margin: 0,
+        filename: `${document.getElementById('form-full_name').value.replace(/\s+/g, '_')}_Resume.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
     html2pdf().set(opt).from(element).save().then(() => { element.style.display = 'none'; });
 }
 
@@ -261,13 +300,11 @@ function appendMessage(text, className, isMarkdown) {
     div.className = `message ${className}`;
     const icon = className.includes('user') ? 'fa-user' : 'fa-robot';
     div.innerHTML = `<div class="avatar"><i class="fa-solid ${icon}"></i></div><div class="content">${isMarkdown ? marked.parse(text) : text}</div>`;
-
     if (className.includes('user')) {
         div.style.cursor = 'pointer';
         div.title = "Click to edit";
         div.onclick = () => { userInput.value = text; userInput.focus(); };
     }
-
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
 }

@@ -26,12 +26,12 @@ static_dir = os.path.join(basedir, 'static')
 
 app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
-# --- SQLite/SQLAlchemy Configuration (For Main Chatbot) ---
+# --- SQLite Configuration (For Standard Chatbot History) ---
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'chat_history.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# --- MongoDB Configuration ---
+# --- MongoDB Configuration (For Resume Data) ---
 MONGO_URI = "mongodb://localhost:27017/"
 DB_NAME = "main_db"
 

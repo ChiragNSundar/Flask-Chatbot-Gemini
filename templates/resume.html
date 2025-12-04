@@ -72,16 +72,8 @@
                     <div class="form-group"><label>Domain <span class="required">*</span></label><input type="text" id="form-domain"></div>
                 </div>
                 <div class="form-group"><label>Job Title <span class="required">*</span></label><input type="text" id="form-job_title"></div>
-
-                <div class="form-group">
-                    <label>Skills <span class="required">*</span></label>
-                    <input type="text" id="form-skills">
-                </div>
-
-                <div class="form-group">
-                    <label>Summary <span class="required">*</span></label>
-                    <textarea id="form-summary" rows="4"></textarea>
-                </div>
+                <div class="form-group"><label>Skills <span class="required">*</span></label><input type="text" id="form-skills"></div>
+                <div class="form-group"><label>Summary <span class="required">*</span></label><textarea id="form-summary" rows="4"></textarea></div>
 
                 <div class="row">
                     <button type="button" onclick="userInput.value='Check ATS Score'; sendResumeMessage();" class="submit-btn" style="background:#3498db; flex:1;">Check ATS</button>
@@ -91,26 +83,42 @@
         </div>
     </div>
 
-    <!-- Hidden Resume Template -->
-    <div id="resume-template" style="display:none; padding: 20px; font-family: 'Times New Roman', serif; color: #000;">
-        <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-            <h1 id="tpl-name" style="margin:0; text-transform:uppercase;">YOUR NAME</h1>
-            <p style="margin:5px 0;"><span id="tpl-email">email@example.com</span> | <span id="tpl-phone">123-456-7890</span></p>
-            <p id="tpl-job" style="font-weight:bold; margin-top:5px;">JOB TITLE</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">PROFESSIONAL SUMMARY</h3>
-            <p id="tpl-summary">Summary text goes here.</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">SKILLS</h3>
-            <p id="tpl-skills">Skills list.</p>
-        </div>
-        <div style="margin-bottom: 20px;">
-            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">EXPERIENCE & DETAILS</h3>
-            <p><strong>Level:</strong> <span id="tpl-exp"></span></p>
-            <p><strong>Industry:</strong> <span id="tpl-domain"></span></p>
-        </div>
+    <!-- NEW PREMIUM HIDDEN RESUME TEMPLATE -->
+    <div id="resume-template" style="display:none;">
+        <header>
+            <h1 id="tpl-name">YOUR NAME</h1>
+            <div class="resume-contact">
+                <span id="tpl-email">email@example.com</span> •
+                <span id="tpl-phone">123-456-7890</span> •
+                <span id="tpl-location">Location (Optional)</span>
+            </div>
+        </header>
+
+        <section class="resume-section">
+            <div class="resume-section-title">Professional Summary</div>
+            <div class="resume-content" id="tpl-summary">A highly motivated professional...</div>
+        </section>
+
+        <section class="resume-section">
+            <div class="resume-section-title">Current Profile</div>
+            <div class="resume-content">
+                <div class="resume-job-header"><span id="tpl-job">Software Engineer</span></div>
+                <div class="resume-job-sub">Experience Level: <span id="tpl-exp">Mid-Level</span> | Domain: <span id="tpl-domain">Tech</span></div>
+            </div>
+        </section>
+
+        <section class="resume-section">
+            <div class="resume-section-title">Core Competencies & Skills</div>
+            <div class="resume-skills-grid" id="tpl-skills-container"></div>
+        </section>
+
+        <section class="resume-section">
+            <div class="resume-section-title">Education</div>
+            <div class="resume-content">
+                <div class="resume-job-header"><span>Degree / Certification</span><span>Year</span></div>
+                <div class="resume-job-sub">University / Institution</div>
+            </div>
+        </section>
     </div>
 
     <div id="success-modal" class="modal hidden">
