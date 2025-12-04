@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Feature 3: HTML2PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
@@ -17,7 +16,6 @@
         <div class="blob blob-2"></div>
     </div>
 
-    <!-- Top Navigation -->
     <nav class="top-nav">
         <div class="logo-container">
             <i class="fa-solid fa-briefcase gradient-icon"></i>
@@ -29,10 +27,7 @@
         </div>
     </nav>
 
-    <!-- Resume Builder Layout -->
     <div class="resume-layout">
-
-        <!-- Left: Chat Interface -->
         <div class="resume-chat-container">
             <div class="chat-header">
                 <span><i class="fa-solid fa-robot"></i> AI Interviewer</span>
@@ -40,39 +35,25 @@
                     <i class="fa-solid fa-trash"></i> Start New Profile
                 </button>
             </div>
-
-            <!-- Feature 1: Progress Bar -->
-            <div class="progress-container">
-                <div id="progress-bar" class="progress-bar"></div>
-            </div>
-
+            <div class="progress-container"><div id="progress-bar" class="progress-bar"></div></div>
             <div id="chat-box" class="chat-box"></div>
-
             <div id="suggestion-area" class="suggestion-area"></div>
-
             <div class="input-area">
                 <div class="input-wrapper">
-                    <label for="resume-upload" class="attach-btn" title="Upload PDF Resume">
-                        <i class="fa-solid fa-file-pdf"></i>
-                    </label>
+                    <label for="resume-upload" class="attach-btn" title="Upload PDF"><i class="fa-solid fa-file-pdf"></i></label>
                     <input type="file" id="resume-upload" accept="application/pdf" hidden>
-
-                    <textarea id="user-input" placeholder="Type your answer or upload PDF..." rows="1"></textarea>
+                    <textarea id="user-input" placeholder="Type answer or upload PDF..." rows="1"></textarea>
                     <button onclick="sendResumeMessage()" id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
 
-        <!-- Right: Candidate Profile Form -->
         <div class="resume-form-container">
             <div class="form-header">
                 <h2><i class="fa-solid fa-id-card"></i> Candidate Profile</h2>
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
-                    <!-- Feature 3: Download Button -->
-                    <button onclick="downloadPDF()" class="icon-btn" title="Download PDF" style="background:transparent; border:1px solid #ccc; padding:5px 10px; border-radius:5px; cursor:pointer;">
-                        <i class="fa-solid fa-file-arrow-down" style="color:#2c3e50;"></i> PDF
-                    </button>
-                </div>
+                <button onclick="downloadPDF()" class="submit-btn" style="background:#2c3e50; margin-bottom:10px; width:auto; display:inline-block;">
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF
+                </button>
             </div>
 
             <div id="form-placeholder">
@@ -81,68 +62,62 @@
             </div>
 
             <form id="final-form" class="hidden-form">
-                <div class="form-group">
-                    <label>Full Name <span class="required">*</span></label>
-                    <input type="text" id="form-full_name" placeholder="John Doe">
-                </div>
-
+                <div class="form-group"><label>Full Name <span class="required">*</span></label><input type="text" id="form-full_name"></div>
                 <div class="row">
-                    <div class="form-group">
-                        <label>Email <span class="required">*</span></label>
-                        <input type="email" id="form-email" placeholder="john@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Phone <span class="required">*</span></label>
-                        <input type="text" id="form-phone" placeholder="1234567890">
-                    </div>
+                    <div class="form-group"><label>Email <span class="required">*</span></label><input type="email" id="form-email"></div>
+                    <div class="form-group"><label>Phone <span class="required">*</span></label><input type="text" id="form-phone"></div>
                 </div>
-
                 <div class="row">
-                    <div class="form-group">
-                        <label>Experience <span class="required">*</span></label>
-                        <input type="text" id="form-experience_level" placeholder="Entry Level, Senior...">
-                    </div>
-                    <div class="form-group">
-                        <label>Domain/Industry <span class="required">*</span></label>
-                        <input type="text" id="form-domain" placeholder="Software, Finance, Healthcare...">
-                    </div>
+                    <div class="form-group"><label>Experience <span class="required">*</span></label><input type="text" id="form-experience_level"></div>
+                    <div class="form-group"><label>Domain <span class="required">*</span></label><input type="text" id="form-domain"></div>
                 </div>
-
-                <div class="form-group">
-                    <label>Job Title <span class="required">*</span></label>
-                    <input type="text" id="form-job_title" placeholder="Software Engineer">
-                </div>
+                <div class="form-group"><label>Job Title <span class="required">*</span></label><input type="text" id="form-job_title"></div>
 
                 <div class="form-group">
                     <label>Skills <span class="required">*</span></label>
-                    <input type="text" id="form-skills" placeholder="Python, React, Project Management...">
+                    <input type="text" id="form-skills">
                 </div>
 
                 <div class="form-group">
                     <label>Summary <span class="required">*</span></label>
-                    <textarea id="form-summary" rows="4" placeholder="Brief professional summary..."></textarea>
+                    <textarea id="form-summary" rows="4"></textarea>
                 </div>
 
-                <!-- Feature 4: ATS Score Button next to Submit -->
                 <div class="row">
-                    <button type="button" onclick="userInput.value='Check ATS Score'; sendResumeMessage();" class="submit-btn" style="background:#3498db; flex:1;">
-                        <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS
-                    </button>
-                    <button type="button" onclick="submitFinalForm()" class="submit-btn" style="flex:1;">
-                        <i class="fa-solid fa-check"></i> Submit
-                    </button>
+                    <button type="button" onclick="userInput.value='Check ATS Score'; sendResumeMessage();" class="submit-btn" style="background:#3498db; flex:1;">Check ATS</button>
+                    <button type="button" onclick="submitFinalForm()" class="submit-btn" style="flex:1;">Submit</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Success Modal -->
+    <!-- Hidden Resume Template -->
+    <div id="resume-template" style="display:none; padding: 20px; font-family: 'Times New Roman', serif; color: #000;">
+        <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
+            <h1 id="tpl-name" style="margin:0; text-transform:uppercase;">YOUR NAME</h1>
+            <p style="margin:5px 0;"><span id="tpl-email">email@example.com</span> | <span id="tpl-phone">123-456-7890</span></p>
+            <p id="tpl-job" style="font-weight:bold; margin-top:5px;">JOB TITLE</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">PROFESSIONAL SUMMARY</h3>
+            <p id="tpl-summary">Summary text goes here.</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">SKILLS</h3>
+            <p id="tpl-skills">Skills list.</p>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <h3 style="background:#eee; padding:5px; border-bottom:1px solid #000;">EXPERIENCE & DETAILS</h3>
+            <p><strong>Level:</strong> <span id="tpl-exp"></span></p>
+            <p><strong>Industry:</strong> <span id="tpl-domain"></span></p>
+        </div>
+    </div>
+
     <div id="success-modal" class="modal hidden">
         <div class="modal-content">
             <i class="fa-solid fa-circle-check success-icon"></i>
-            <h3>Profile Created!</h3>
-            <p style="margin-top: 10px; color: #666;">Your data has been saved successfully.</p>
-            <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #6c5ce7; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+            <h3>Profile Saved!</h3>
+            <button onclick="closeModal()">Close</button>
         </div>
     </div>
 

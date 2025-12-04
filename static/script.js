@@ -1,4 +1,3 @@
-// DOM Elements
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
@@ -16,19 +15,13 @@ let currentChatId = null;
 let abortController = null;
 let currentImageBase64 = null;
 
-// --- 1. INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    // FIX: Load conversations first, then decide whether to load existing or create new
     loadConversations(true);
-
-    if(tempSlider && tempValue) {
-        tempValue.textContent = tempSlider.value;
-    }
+    if(tempSlider && tempValue) tempValue.textContent = tempSlider.value;
 });
 
-// --- 2. SETTINGS LOGIC ---
 function toggleSettings() {
-    settingsPanel.classList.toggle('open');
+    if(settingsPanel) settingsPanel.classList.toggle('open');
 }
 
 if(tempSlider) {
@@ -37,31 +30,21 @@ if(tempSlider) {
     });
 }
 
-// --- 3. SIDEBAR LOGIC ---
 function loadConversations(autoLoadFirst = false) {
+    if(!conversationList) return;
     fetch('/api/conversations')
         .then(res => res.json())
         .then(chats => {
             conversationList.innerHTML = '';
             chats.forEach(chat => {
                 const div = document.createElement('div');
-                div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-                div.innerHTML = `
-                    <span onclick="loadChat(${chat.id})">${chat.title}</span>
-                    <i class="fa-solid fa-trash delete-chat" onclick="deleteChat(${chat.id}, event)"></i>
-                `;
+                div.className = `chat-item ${chat.id == currentChatId ? 'active' : ''}`;
+                div.innerHTML = `<span onclick="loadChat(${chat.id})">${chat.title}</span> <i class="fa-solid fa-trash delete-chat" onclick="deleteChat(${chat.id}, event)"></i>`;
                 conversationList.appendChild(div);
             });
-
-            // FIX: Auto-load logic
             if (autoLoadFirst) {
-                if (chats.length > 0) {
-                    // Load the most recent chat instead of creating a new one
-                    loadChat(chats[0].id);
-                } else {
-                    // Only create new if list is empty
-                    createNewChat();
-                }
+                if (chats.length > 0) loadChat(chats[0].id);
+                else createNewChat();
             }
         });
 }
@@ -70,19 +53,15 @@ function createNewChat() {
     fetch('/api/conversations', { method: 'POST' })
         .then(res => res.json())
         .then(chat => {
-            // If backend returns an existing empty chat, it will have the same ID
-            // If it creates a new one, it will have a new ID
             loadChat(chat.id);
-            // Refresh list to show the "New Chat" item
             loadConversations();
         });
 }
 
 function loadChat(chatId) {
     currentChatId = chatId;
-    // Refresh list to update 'active' class
     loadConversations();
-    chatBox.innerHTML = '';
+    if(chatBox) chatBox.innerHTML = '';
 
     fetch(`/api/conversations/${chatId}/messages`)
         .then(res => res.json())
@@ -99,16 +78,12 @@ function loadChat(chatId) {
 }
 
 function deleteChat(chatId, event) {
-    event.stopPropagation(); // Stop click from loading the chat
-
+    event.stopPropagation();
     if(!confirm("Delete this chat?")) return;
-
     fetch(`/api/conversations/${chatId}`, { method: 'DELETE' })
         .then(() => {
-            // If we deleted the active chat, reset
-            if(currentChatId === chatId) {
+            if(currentChatId == chatId) {
                 currentChatId = null;
-                // Reload list and auto-select the next available one
                 loadConversations(true);
             } else {
                 loadConversations();
@@ -116,50 +91,46 @@ function deleteChat(chatId, event) {
         });
 }
 
-// --- 4. IMAGE LOGIC ---
-imageInput.addEventListener('change', function() {
-    const file = this.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            currentImageBase64 = e.target.result;
-            imagePreview.src = currentImageBase64;
-            imagePreviewContainer.classList.remove('hidden');
+if(imageInput) {
+    imageInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImageBase64 = e.target.result;
+                if(imagePreview) imagePreview.src = currentImageBase64;
+                if(imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
+            }
+            reader.readAsDataURL(file);
         }
-        reader.readAsDataURL(file);
-    }
-});
+    });
+}
 
 function clearImage() {
-    imageInput.value = '';
+    if(imageInput) imageInput.value = '';
     currentImageBase64 = null;
-    imagePreviewContainer.classList.add('hidden');
+    if(imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
 }
 
-// --- 5. VOICE LOGIC ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-
-if(recognition) {
-    recognition.continuous = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => micBtn.classList.add('recording');
-    recognition.onend = () => micBtn.classList.remove('recording');
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        userInput.value += transcript;
-    };
-}
 
 function toggleVoice() {
     if(!recognition) return alert("Browser does not support voice.");
     if(micBtn.classList.contains('recording')) recognition.stop();
-    else recognition.start();
+    else {
+        recognition.start();
+        micBtn.classList.add('recording');
+    }
+}
+if(recognition) {
+    recognition.onresult = (event) => {
+        userInput.value += event.results[0][0].transcript;
+        micBtn.classList.remove('recording');
+    };
+    recognition.onend = () => micBtn.classList.remove('recording');
 }
 
-// --- 6. SEND MESSAGE (STREAMING) ---
 async function sendMessage() {
     const text = userInput.value.trim();
     if (!text && !currentImageBase64) return;
@@ -172,9 +143,7 @@ async function sendMessage() {
     clearImage();
 
     toggleButtons(true);
-
-    const botMsgId = 'msg-' + Date.now();
-    const contentDiv = appendMessage("", 'bot-message', false, false, null, botMsgId);
+    const contentDiv = appendMessage("", 'bot-message', false, false, null);
 
     abortController = new AbortController();
 
@@ -186,7 +155,7 @@ async function sendMessage() {
                 chat_id: currentChatId,
                 message: text,
                 image: imgToSend,
-                temperature: tempSlider.value
+                temperature: tempSlider ? tempSlider.value : 0.7
             }),
             signal: abortController.signal
         });
@@ -198,10 +167,8 @@ async function sendMessage() {
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
-
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     try {
@@ -211,43 +178,26 @@ async function sendMessage() {
                             contentDiv.innerHTML = marked.parse(botText);
                             chatBox.scrollTop = chatBox.scrollHeight;
                         }
-                        if (data.done) {
-                            loadConversations(); // Refresh titles
-                        }
+                        if (data.done && data.title) loadConversations();
                     } catch (e) {}
                 }
             }
         }
-
     } catch (err) {
-        if (err.name !== 'AbortError') {
-            contentDiv.innerHTML += `<br><span style="color:red">Error: ${err.message}</span>`;
-        }
+        if (err.name !== 'AbortError') contentDiv.innerHTML += `<br><span style="color:red">Error: ${err.message}</span>`;
     }
-
     toggleButtons(false);
 }
 
-// --- 7. UTILITIES ---
-function appendMessage(text, className, isMarkdown, isTypewriter, imageSrc, customId) {
+function appendMessage(text, className, isMarkdown, isTypewriter, imageSrc) {
     const div = document.createElement('div');
     div.className = `message ${className}`;
     const icon = className.includes('user') ? 'fa-user' : 'fa-robot';
-
     let imgHTML = imageSrc ? `<img src="${imageSrc}" class="message-img">` : '';
-
-    div.innerHTML = `
-        <div class="avatar"><i class="fa-solid ${icon}"></i></div>
-        <div class="content">
-            ${imgHTML}
-            <div class="text-content">${isMarkdown ? marked.parse(text) : text}</div>
-        </div>
-    `;
-
+    div.innerHTML = `<div class="avatar"><i class="fa-solid ${icon}"></i></div><div class="content">${imgHTML}<div class="text-content">${isMarkdown ? marked.parse(text) : text}</div></div>`;
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
-
-    if(customId) return div.querySelector('.text-content');
+    return div.querySelector('.text-content');
 }
 
 function stopGeneration() {
@@ -256,23 +206,15 @@ function stopGeneration() {
 }
 
 function toggleButtons(loading) {
-    sendBtn.classList.toggle('hidden', loading);
-    stopBtn.classList.toggle('hidden', !loading);
+    if(sendBtn) sendBtn.classList.toggle('hidden', loading);
+    if(stopBtn) stopBtn.classList.toggle('hidden', !loading);
 }
-
-marked.setOptions({
-    highlight: function(code, lang) {
-        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-        return hljs.highlight(code, { language }).value;
-    }
-});
 
 if (userInput) {
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
     });
-
     userInput.addEventListener("keydown", function(event) {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();

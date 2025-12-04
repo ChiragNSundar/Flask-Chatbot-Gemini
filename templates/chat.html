@@ -16,7 +16,6 @@
         <div class="blob blob-2"></div>
     </div>
 
-    <!-- Top Navigation -->
     <nav class="top-nav">
         <div class="logo-container">
             <i class="fa-solid fa-briefcase gradient-icon"></i>
@@ -28,10 +27,7 @@
         </div>
     </nav>
 
-    <!-- Chat Layout -->
     <div class="app-layout">
-
-        <!-- Sidebar -->
         <div class="sidebar">
             <button onclick="createNewChat()" class="new-chat-btn">
                 <i class="fa-solid fa-plus"></i> New Chat
@@ -39,7 +35,6 @@
             <div id="conversation-list" class="conversation-list"></div>
         </div>
 
-        <!-- Main Chat -->
         <div class="main-container">
             <div class="chat-header">
                 <div class="logo-container">
@@ -62,22 +57,21 @@
             <div id="chat-box" class="chat-box">
                 <div class="message bot-message">
                     <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-                    <div class="content">Hello! Select a chat or start a new one.</div>
+                    <div class="content">Hello! Ask me anything about career or tech.</div>
                 </div>
             </div>
 
-            <div id="image-preview-container" class="hidden">
-                <img id="image-preview" src="" alt="Preview">
-                <button onclick="clearImage()" class="close-img-btn"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
             <div class="input-area">
+                <!-- Preview container logic fixed: 'hidden' class handles display -->
+                <div id="image-preview-container" class="hidden">
+                    <img id="image-preview" src="" alt="Preview">
+                    <button onclick="clearImage()" class="close-img-btn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
                 <div class="input-wrapper">
                     <label for="image-upload" class="attach-btn"><i class="fa-solid fa-paperclip"></i></label>
                     <input type="file" id="image-upload" accept="image/*" hidden>
-
                     <textarea id="user-input" placeholder="Type or speak..." rows="1"></textarea>
-
                     <button id="mic-btn" onclick="toggleVoice()"><i class="fa-solid fa-microphone"></i></button>
                     <button onclick="sendMessage()" id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
                     <button onclick="stopGeneration()" id="stop-btn" class="hidden"><i class="fa-solid fa-stop"></i></button>
