@@ -1,13 +1,14 @@
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const suggestionArea = document.getElementById('suggestion-area');
-const finalForm = document.getElementById('final-form'); // Target the form
+const finalForm = document.getElementById('final-form');
 const formPlaceholder = document.getElementById('form-placeholder');
 const successModal = document.getElementById('success-modal');
 const resumeUpload = document.getElementById('resume-upload');
 
 let currentStep = -1;
 let collectedData = {};
+let resumeSessionId = null; // Unique ID for logging this resume session
 
 // --- RESUME STEPS (Mirroring Python for client-side logic) ---
 const RESUME_STEPS = [
@@ -24,12 +25,16 @@ const RESUME_STEPS = [
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Local Storage Persistence
     const savedData = localStorage.getItem('resumeData');
+    const savedSessionId = localStorage.getItem('resumeSessionId');
+
     if (savedData) {
         collectedData = JSON.parse(savedData);
         updateLiveForm(collectedData);
-        // FIX: Ensure form is visible on load if data exists
         if (Object.keys(collectedData).length > 0) {
             showForm();
+        }
+        if (savedSessionId) {
+            resumeSessionId = savedSessionId;
         }
         sendResumeMessage(false, true);
     } else {
@@ -42,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const fieldName = this.id.replace('form-', '');
             collectedData[fieldName] = this.value.trim();
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
-            // FIX: Ensure form is visible when user manually types
             showForm();
         });
     });
@@ -68,7 +72,8 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
         body: JSON.stringify({
             message: text,
             step: currentStep,
-            data: collectedData
+            data: collectedData,
+            session_id: resumeSessionId // Send current session ID
         })
     })
     .then(res => res.json())
@@ -78,6 +83,12 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
         if (data.error) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
+            // Update and save session ID
+            if (data.session_id && data.session_id !== resumeSessionId) {
+                resumeSessionId = data.session_id;
+                localStorage.setItem('resumeSessionId', resumeSessionId);
+            }
+
             if (data.response && data.response.trim() !== "") {
                 appendMessage(data.response, 'bot-message', true);
             }
@@ -90,7 +101,6 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
                 collectedData = data.data;
                 updateLiveForm(collectedData);
                 localStorage.setItem('resumeData', JSON.stringify(collectedData));
-                // FIX: Ensure form is visible when data is updated by AI
                 if (Object.keys(collectedData).length > 0) {
                     showForm();
                 }
@@ -137,7 +147,7 @@ function uploadResume(file) {
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
 
             if (Object.keys(collectedData).length > 0) {
-                showForm(); // FIX: Show form after PDF upload
+                showForm();
             }
 
             appendMessage(`✅ ${data.message}`, 'bot-message');
@@ -167,6 +177,7 @@ function renderSuggestions(suggestions) {
         chip.title = text;
 
         chip.onclick = () => {
+            // Robust Regex to remove headings like "Option 1:", "**Summary 1:**", "1. ", etc.
             let cleanText = text.replace(
                 /^\s*(\*\*[^\*]+:\*\*|\*\*[^\*]+\*\*:\s*|Option\s*\d+\s*:|Summary\s*\d*\s*:|\d+\.\s*|\*\s*)/i,
                 ''
@@ -184,14 +195,12 @@ function renderSuggestions(suggestions) {
 }
 
 function updateLiveForm(data) {
-    // Update the form fields
     for (const [key, value] of Object.entries(data)) {
         const field = document.getElementById(`form-${key}`);
         if (field) field.value = value;
     }
 }
 
-// NEW FUNCTION: To make the form visible
 function showForm() {
     formPlaceholder.classList.add('hidden');
     finalForm.classList.remove('hidden-form');
@@ -199,7 +208,7 @@ function showForm() {
 }
 
 function showFinalForm() {
-    showForm(); // Ensure form is visible
+    showForm();
     suggestionArea.innerHTML = '';
     userInput.disabled = true;
     userInput.placeholder = "Interview complete.";
@@ -213,7 +222,9 @@ function submitFinalForm() {
         experience_level: document.getElementById('form-experience_level').value.trim(),
         job_title: document.getElementById('form-job_title').value.trim(),
         skills: document.getElementById('form-skills').value.trim(),
-        summary: document.getElementById('form-summary').value.trim()
+        summary: document.getElementById('form-summary').value.trim(),
+        // Send session ID for MongoDB correlation
+        resume_session_id: resumeSessionId
     };
 
     const emptyFields = [];
@@ -238,7 +249,8 @@ function submitFinalForm() {
     .then(res => res.json())
     .then(data => {
         if(data.status === 'success') {
-            localStorage.removeItem('resumeData'); // Clear local storage on success
+            localStorage.removeItem('resumeData');
+            localStorage.removeItem('resumeSessionId');
             successModal.classList.remove('hidden');
         } else {
             alert("Error saving profile: " + (data.error || "Unknown error"));
@@ -284,10 +296,10 @@ function removeMessage(id) {
     if (el) el.remove();
 }
 
-// Clear Profile Function (exposed globally via onclick in HTML)
 function clearProfile() {
     if (confirm("Are you sure you want to clear your current profile and start over?")) {
         localStorage.removeItem('resumeData');
+        localStorage.removeItem('resumeSessionId');
         window.location.reload();
     }
 }
