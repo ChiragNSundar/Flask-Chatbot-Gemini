@@ -40,19 +40,30 @@ mongo_profile_collection = None
 mongo_chat_collection = None
 
 try:
+    # 1. Attempt Connection
     mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    mongo_client.admin.command('ismaster')
+    mongo_client.admin.command('ismaster')  # Triggers a connection check
 
+    # 2. Define References (MongoDB creates these automatically on first write)
     mongo_db = mongo_client[DB_NAME]
     mongo_profile_collection = mongo_db["profile_resume"]
     mongo_chat_collection = mongo_db["ai_chat"]
-    print("MongoDB connection successful.")
+
+    # 3. Status Check (Visual Confirmation for Developer)
+    existing_dbs = mongo_client.list_database_names()
+    if DB_NAME in existing_dbs:
+        print(f"SUCCESS: Connected to existing database '{DB_NAME}'.")
+        # Check collections
+        existing_collections = mongo_db.list_collection_names()
+        print(f"   - Collections found: {existing_collections}")
+    else:
+        print(f"NOTICE: Database '{DB_NAME}' not found. It will be created automatically when data is saved.")
 
 except ConnectionFailure as e:
-    print(f"ERROR: MongoDB Connection Failed. {e}")
+    print(f"CRITICAL ERROR: Could not connect to MongoDB at {MONGO_URI}. Resume features will fail.\nDetails: {e}")
     mongo_client = None
 except Exception as e:
-    print(f"MongoDB Error: {e}")
+    print(f"An unexpected error occurred during MongoDB setup: {e}")
     mongo_client = None
 
 # Gemini Config
@@ -136,6 +147,7 @@ def log_resume_interaction(session_id, user_text, ai_text, step_index, collected
         'snapshot': collected_data
     }
 
+    # MongoDB will automatically create the 'ai_chat' collection here if it doesn't exist
     mongo_chat_collection.update_one(
         {'_id': oid},
         {
@@ -397,7 +409,6 @@ def resume_chat():
     next_rule = RESUME_STEPS[next_step_index]
     ai_text = next_rule['question']
 
-    # Prepend warning if summary was just saved
     if just_saved_summary:
         ai_text = "I've updated your summary. Please review it for any placeholders.\n\n" + ai_text
 
@@ -441,6 +452,7 @@ def submit_resume():
             new_profile['chat_session_id'] = None
 
         new_profile['submitted_at'] = datetime.utcnow()
+        # MongoDB automatically creates 'profile_resume' if it doesn't exist
         mongo_profile_collection.insert_one(new_profile)
 
         return jsonify({'status': 'success', 'message': 'Profile saved to MongoDB'})
