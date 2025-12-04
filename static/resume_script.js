@@ -9,6 +9,7 @@ const resumeUpload = document.getElementById('resume-upload');
 let currentStep = -1;
 let collectedData = {};
 let resumeSessionId = null;
+let currentResumeUploadId = null; // NEW: To track the PDF upload ID
 
 // Make sure this matches Python RESUME_STEPS exactly
 const RESUME_STEPS = [
@@ -26,12 +27,14 @@ const RESUME_STEPS = [
 document.addEventListener('DOMContentLoaded', () => {
     const savedData = localStorage.getItem('resumeData');
     const savedSessionId = localStorage.getItem('resumeSessionId');
+    const savedUploadId = localStorage.getItem('resumeUploadId');
 
     if (savedData) {
         collectedData = JSON.parse(savedData);
         updateLiveForm(collectedData);
         if (Object.keys(collectedData).length > 0) showForm();
         if (savedSessionId) resumeSessionId = savedSessionId;
+        if (savedUploadId) currentResumeUploadId = savedUploadId;
         sendResumeMessage(false, true);
     } else {
         sendResumeMessage(true);
@@ -96,7 +99,6 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
                 if (Object.keys(collectedData).length > 0) showForm();
             }
 
-            // Pass field name to renderer
             if (data.suggestions && data.suggestions.length > 0) {
                 const stepField = RESUME_STEPS[currentStep] ? RESUME_STEPS[currentStep].field : 'unknown';
                 renderSuggestions(data.suggestions, stepField);
@@ -110,7 +112,7 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
 
             if (data.finished) {
                 showFinalForm();
-                disableChatInput(); // Disable input on natural finish
+                disableChatInput();
             }
         }
     });
@@ -154,13 +156,13 @@ function renderSuggestions(suggestions, currentFieldName) {
                 }
                 userInput.focus();
             }
-            // SUMMARY RESULTS: Auto-Send (CHANGED per request)
+            // SUMMARY RESULTS: Auto-Send
             else if (currentFieldName === 'summary') {
                 let cleanText = text.replace(/^[\s\W]*(?:Option|Summary)\s*\d*[:\.]\s*/i, '').trim();
                 userInput.value = cleanText;
-                sendResumeMessage(); // Auto-send triggered
+                sendResumeMessage();
             }
-            // DEFAULT: Single Select (Auto-Send)
+            // DEFAULT: Auto-Send
             else {
                 userInput.value = text;
                 sendResumeMessage();
@@ -188,6 +190,13 @@ function uploadResume(file) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
             collectedData = { ...collectedData, ...data.data };
+
+            // Capture Resume ID
+            if (data.resume_id) {
+                currentResumeUploadId = data.resume_id;
+                localStorage.setItem('resumeUploadId', currentResumeUploadId);
+            }
+
             updateLiveForm(collectedData);
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
             if (Object.keys(collectedData).length > 0) showForm();
@@ -234,7 +243,8 @@ function submitFinalForm() {
         job_title: document.getElementById('form-job_title').value.trim(),
         skills: document.getElementById('form-skills').value.trim(),
         summary: document.getElementById('form-summary').value.trim(),
-        resume_session_id: resumeSessionId
+        resume_session_id: resumeSessionId,
+        upload_resume_id: currentResumeUploadId // Send linked PDF ID
     };
 
     const emptyFields = [];
@@ -261,8 +271,9 @@ function submitFinalForm() {
         if(data.status === 'success') {
             localStorage.removeItem('resumeData');
             localStorage.removeItem('resumeSessionId');
+            localStorage.removeItem('resumeUploadId');
             successModal.classList.remove('hidden');
-            disableChatInput(); // Disable chat input on manual submit
+            disableChatInput();
         } else {
             alert("Error saving profile: " + (data.error || "Unknown error"));
         }
@@ -311,6 +322,7 @@ function clearProfile() {
     if (confirm("Clear profile and start over?")) {
         localStorage.removeItem('resumeData');
         localStorage.removeItem('resumeSessionId');
+        localStorage.removeItem('resumeUploadId');
         window.location.reload();
     }
 }

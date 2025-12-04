@@ -38,32 +38,28 @@ DB_NAME = "main_db"
 mongo_client = None
 mongo_profile_collection = None
 mongo_chat_collection = None
+mongo_resume_upload_collection = None  # NEW
+mongo_resume_parsed_collection = None  # NEW
 
 try:
-    # 1. Attempt Connection
     mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    mongo_client.admin.command('ismaster')  # Triggers a connection check
+    mongo_client.admin.command('ismaster')
 
-    # 2. Define References (MongoDB creates these automatically on first write)
     mongo_db = mongo_client[DB_NAME]
+
+    # Collections
     mongo_profile_collection = mongo_db["profile_resume"]
     mongo_chat_collection = mongo_db["ai_chat"]
+    mongo_resume_upload_collection = mongo_db["resume_upload"]  # Raw PDF Text
+    mongo_resume_parsed_collection = mongo_db["resume_parsed"]  # AI Parsed JSON
 
-    # 3. Status Check (Visual Confirmation for Developer)
-    existing_dbs = mongo_client.list_database_names()
-    if DB_NAME in existing_dbs:
-        print(f"SUCCESS: Connected to existing database '{DB_NAME}'.")
-        # Check collections
-        existing_collections = mongo_db.list_collection_names()
-        print(f"   - Collections found: {existing_collections}")
-    else:
-        print(f"NOTICE: Database '{DB_NAME}' not found. It will be created automatically when data is saved.")
+    print("MongoDB connection successful.")
 
 except ConnectionFailure as e:
-    print(f"CRITICAL ERROR: Could not connect to MongoDB at {MONGO_URI}. Resume features will fail.\nDetails: {e}")
+    print(f"ERROR: MongoDB Connection Failed. {e}")
     mongo_client = None
 except Exception as e:
-    print(f"An unexpected error occurred during MongoDB setup: {e}")
+    print(f"MongoDB Error: {e}")
     mongo_client = None
 
 # Gemini Config
@@ -147,7 +143,6 @@ def log_resume_interaction(session_id, user_text, ai_text, step_index, collected
         'snapshot': collected_data
     }
 
-    # MongoDB will automatically create the 'ai_chat' collection here if it doesn't exist
     mongo_chat_collection.update_one(
         {'_id': oid},
         {
@@ -164,6 +159,7 @@ def get_dynamic_suggestions(field, data):
         if field == "job_title":
             exp = data.get("experience_level", "Entry Level")
             dom = data.get("domain", "General")
+
             prompt = f"List 3 standard job titles for a '{exp}' professional in the '{dom}' industry. Output ONLY the titles separated by commas."
             response = model.generate_content(prompt)
             return [s.strip() for s in response.text.split(',') if s.strip()][:3]
@@ -282,25 +278,51 @@ def upload_resume():
     if file.filename == '': return jsonify({'error': 'No file selected'}), 400
 
     try:
+        # 1. Generate unique resume_id
+        resume_id = ObjectId()
+
+        # 2. Extract Raw Text
         pdf_reader = PyPDF2.PdfReader(file)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n"
 
+        # 3. Store Raw Data in 'resume_upload'
+        if mongo_resume_upload_collection is not None:
+            mongo_resume_upload_collection.insert_one({
+                "_id": resume_id,
+                "resume_id": resume_id,  # Redundant but explicit for queries
+                "filename": file.filename,
+                "raw_text_content": text,
+                "timestamp": datetime.utcnow()
+            })
+
+        # 4. Parse with Gemini
         prompt = f"""
-        Extract details from resume to JSON. Keys: "full_name", "email", "phone", "experience_level", "job_title", "skills", "summary".
+        Extract details from resume to JSON. Keys: "full_name", "email", "phone", "experience_level", "domain", "job_title", "skills", "summary".
         Text: {text[:4000]}
         """
         response = model.generate_content(prompt)
         cleaned_text = response.text.replace('```json', '').replace('```', '').strip()
         extracted_data = json.loads(cleaned_text)
 
+        # 5. Store Parsed Data in 'resume_parsed'
+        if mongo_resume_parsed_collection is not None:
+            mongo_resume_parsed_collection.insert_one({
+                "resume_id": resume_id,  # Linking ID
+                "parsed_data": extracted_data,
+                "timestamp": datetime.utcnow()
+            })
+
+        # 6. Return data + resume_id to frontend
         return jsonify({
             'success': True,
             'data': extracted_data,
-            'message': "I've analyzed your resume."
+            'resume_id': str(resume_id),  # Send ID as string
+            'message': "I've analyzed your resume and stored the data."
         })
     except Exception as e:
+        print(f"Upload Error: {e}")
         return jsonify({'error': 'Failed to process PDF'}), 500
 
 
@@ -444,15 +466,22 @@ def submit_resume():
 
     try:
         new_profile = request.json
-        session_id_str = new_profile.pop('resume_session_id', None)
 
+        # 1. Chat Log Linking
+        session_id_str = new_profile.pop('resume_session_id', None)
         if session_id_str and ObjectId.is_valid(session_id_str):
             new_profile['chat_session_id'] = ObjectId(session_id_str)
         else:
             new_profile['chat_session_id'] = None
 
+        # 2. PDF Upload Linking
+        upload_id_str = new_profile.pop('upload_resume_id', None)
+        if upload_id_str and ObjectId.is_valid(upload_id_str):
+            new_profile['resume_upload_id'] = ObjectId(upload_id_str)  # Links to resume_upload & resume_parsed
+        else:
+            new_profile['resume_upload_id'] = None
+
         new_profile['submitted_at'] = datetime.utcnow()
-        # MongoDB automatically creates 'profile_resume' if it doesn't exist
         mongo_profile_collection.insert_one(new_profile)
 
         return jsonify({'status': 'success', 'message': 'Profile saved to MongoDB'})
