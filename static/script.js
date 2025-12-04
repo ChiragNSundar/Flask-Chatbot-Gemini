@@ -20,18 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(tempSlider && tempValue) tempValue.textContent = tempSlider.value;
 });
 
-function toggleSettings() {
-    if(settingsPanel) settingsPanel.classList.toggle('open');
-}
+function toggleSettings() { settingsPanel.classList.toggle('open'); }
 
 if(tempSlider) {
-    tempSlider.addEventListener('input', function() {
-        tempValue.textContent = this.value;
-    });
+    tempSlider.addEventListener('input', function() { tempValue.textContent = this.value; });
 }
 
 function loadConversations(autoLoadFirst = false) {
-    if(!conversationList) return;
     fetch('/api/conversations')
         .then(res => res.json())
         .then(chats => {
@@ -52,28 +47,18 @@ function loadConversations(autoLoadFirst = false) {
 function createNewChat() {
     fetch('/api/conversations', { method: 'POST' })
         .then(res => res.json())
-        .then(chat => {
-            loadChat(chat.id);
-            loadConversations();
-        });
+        .then(chat => { loadChat(chat.id); loadConversations(); });
 }
 
 function loadChat(chatId) {
     currentChatId = chatId;
     loadConversations();
-    if(chatBox) chatBox.innerHTML = '';
-
+    chatBox.innerHTML = '';
     fetch(`/api/conversations/${chatId}/messages`)
         .then(res => res.json())
         .then(messages => {
-            if(messages.length === 0) {
-                appendMessage("Start a new conversation!", "bot-message");
-            } else {
-                messages.forEach(msg => {
-                    const className = msg.role === 'user' ? 'user-message' : 'bot-message';
-                    appendMessage(msg.content, className, true, false, msg.image);
-                });
-            }
+            if(messages.length === 0) appendMessage("Start a new conversation!", "bot-message");
+            else messages.forEach(msg => appendMessage(msg.content, msg.role === 'user' ? 'user-message' : 'bot-message', true, false, msg.image));
         });
 }
 
@@ -82,12 +67,8 @@ function deleteChat(chatId, event) {
     if(!confirm("Delete this chat?")) return;
     fetch(`/api/conversations/${chatId}`, { method: 'DELETE' })
         .then(() => {
-            if(currentChatId == chatId) {
-                currentChatId = null;
-                loadConversations(true);
-            } else {
-                loadConversations();
-            }
+            if(currentChatId == chatId) { currentChatId = null; loadConversations(true); }
+            else loadConversations();
         });
 }
 
@@ -98,8 +79,8 @@ if(imageInput) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 currentImageBase64 = e.target.result;
-                if(imagePreview) imagePreview.src = currentImageBase64;
-                if(imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
+                imagePreview.src = currentImageBase64;
+                imagePreviewContainer.classList.remove('hidden');
             }
             reader.readAsDataURL(file);
         }
@@ -107,9 +88,9 @@ if(imageInput) {
 }
 
 function clearImage() {
-    if(imageInput) imageInput.value = '';
+    imageInput.value = '';
     currentImageBase64 = null;
-    if(imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+    imagePreviewContainer.classList.add('hidden');
 }
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -118,16 +99,10 @@ const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 function toggleVoice() {
     if(!recognition) return alert("Browser does not support voice.");
     if(micBtn.classList.contains('recording')) recognition.stop();
-    else {
-        recognition.start();
-        micBtn.classList.add('recording');
-    }
+    else { recognition.start(); micBtn.classList.add('recording'); }
 }
 if(recognition) {
-    recognition.onresult = (event) => {
-        userInput.value += event.results[0][0].transcript;
-        micBtn.classList.remove('recording');
-    };
+    recognition.onresult = (event) => { userInput.value += event.results[0][0].transcript; micBtn.classList.remove('recording'); };
     recognition.onend = () => micBtn.classList.remove('recording');
 }
 
@@ -137,33 +112,24 @@ async function sendMessage() {
     if (!currentChatId) return alert("Please select a chat first.");
 
     appendMessage(text, 'user-message', false, false, currentImageBase64);
-    userInput.value = '';
-    userInput.style.height = 'auto';
+    userInput.value = ''; userInput.style.height = 'auto';
     const imgToSend = currentImageBase64;
     clearImage();
 
     toggleButtons(true);
     const contentDiv = appendMessage("", 'bot-message', false, false, null);
-
     abortController = new AbortController();
 
     try {
         const response = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: currentChatId,
-                message: text,
-                image: imgToSend,
-                temperature: tempSlider ? tempSlider.value : 0.7
-            }),
+            body: JSON.stringify({ chat_id: currentChatId, message: text, image: imgToSend, temperature: tempSlider.value }),
             signal: abortController.signal
         });
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let botText = "";
-
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -173,19 +139,13 @@ async function sendMessage() {
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        if (data.text) {
-                            botText += data.text;
-                            contentDiv.innerHTML = marked.parse(botText);
-                            chatBox.scrollTop = chatBox.scrollHeight;
-                        }
+                        if (data.text) { botText += data.text; contentDiv.innerHTML = marked.parse(botText); chatBox.scrollTop = chatBox.scrollHeight; }
                         if (data.done && data.title) loadConversations();
                     } catch (e) {}
                 }
             }
         }
-    } catch (err) {
-        if (err.name !== 'AbortError') contentDiv.innerHTML += `<br><span style="color:red">Error: ${err.message}</span>`;
-    }
+    } catch (err) { if (err.name !== 'AbortError') contentDiv.innerHTML += `<br><span style="color:red">Error: ${err.message}</span>`; }
     toggleButtons(false);
 }
 
@@ -200,25 +160,7 @@ function appendMessage(text, className, isMarkdown, isTypewriter, imageSrc) {
     return div.querySelector('.text-content');
 }
 
-function stopGeneration() {
-    if(abortController) abortController.abort();
-    toggleButtons(false);
-}
+function stopGeneration() { if(abortController) abortController.abort(); toggleButtons(false); }
+function toggleButtons(loading) { sendBtn.classList.toggle('hidden', loading); stopBtn.classList.toggle('hidden', !loading); }
 
-function toggleButtons(loading) {
-    if(sendBtn) sendBtn.classList.toggle('hidden', loading);
-    if(stopBtn) stopBtn.classList.toggle('hidden', !loading);
-}
-
-if (userInput) {
-    userInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-    });
-    userInput.addEventListener("keydown", function(event) {
-        if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage();
-        }
-    });
-}
+userInput.addEventListener("keydown", function(event) { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } });
