@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Feature 3: HTML2PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 
@@ -34,15 +36,18 @@
         <div class="resume-chat-container">
             <div class="chat-header">
                 <span><i class="fa-solid fa-robot"></i> AI Interviewer</span>
-                <!-- Button to clear local storage and start over -->
                 <button onclick="clearProfile()" class="new-chat-btn" style="width: auto; padding: 8px 15px; margin: 0; background: #ff4757;">
                     <i class="fa-solid fa-trash"></i> Start New Profile
                 </button>
             </div>
 
+            <!-- Feature 1: Progress Bar -->
+            <div class="progress-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+
             <div id="chat-box" class="chat-box"></div>
 
-            <!-- Suggestion Chips Area -->
             <div id="suggestion-area" class="suggestion-area"></div>
 
             <div class="input-area">
@@ -62,7 +67,12 @@
         <div class="resume-form-container">
             <div class="form-header">
                 <h2><i class="fa-solid fa-id-card"></i> Candidate Profile</h2>
-                <p>Review and finalize your details</p>
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                    <!-- Feature 3: Download Button -->
+                    <button onclick="downloadPDF()" class="icon-btn" title="Download PDF" style="background:transparent; border:1px solid #ccc; padding:5px 10px; border-radius:5px; cursor:pointer;">
+                        <i class="fa-solid fa-file-arrow-down" style="color:#2c3e50;"></i> PDF
+                    </button>
+                </div>
             </div>
 
             <div id="form-placeholder">
@@ -92,7 +102,6 @@
                         <label>Experience <span class="required">*</span></label>
                         <input type="text" id="form-experience_level" placeholder="Entry Level, Senior...">
                     </div>
-                    <!-- NEW FIELD: DOMAIN -->
                     <div class="form-group">
                         <label>Domain/Industry <span class="required">*</span></label>
                         <input type="text" id="form-domain" placeholder="Software, Finance, Healthcare...">
@@ -114,7 +123,15 @@
                     <textarea id="form-summary" rows="4" placeholder="Brief professional summary..."></textarea>
                 </div>
 
-                <button type="button" onclick="submitFinalForm()" class="submit-btn">Submit Profile</button>
+                <!-- Feature 4: ATS Score Button next to Submit -->
+                <div class="row">
+                    <button type="button" onclick="userInput.value='Check ATS Score'; sendResumeMessage();" class="submit-btn" style="background:#3498db; flex:1;">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS
+                    </button>
+                    <button type="button" onclick="submitFinalForm()" class="submit-btn" style="flex:1;">
+                        <i class="fa-solid fa-check"></i> Submit
+                    </button>
+                </div>
             </form>
         </div>
     </div>

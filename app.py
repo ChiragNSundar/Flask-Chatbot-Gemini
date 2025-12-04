@@ -38,21 +38,16 @@ DB_NAME = "main_db"
 mongo_client = None
 mongo_profile_collection = None
 mongo_chat_collection = None
-mongo_resume_upload_collection = None  # NEW
-mongo_resume_parsed_collection = None  # NEW
 
 try:
     mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     mongo_client.admin.command('ismaster')
 
     mongo_db = mongo_client[DB_NAME]
-
-    # Collections
     mongo_profile_collection = mongo_db["profile_resume"]
     mongo_chat_collection = mongo_db["ai_chat"]
-    mongo_resume_upload_collection = mongo_db["resume_upload"]  # Raw PDF Text
-    mongo_resume_parsed_collection = mongo_db["resume_parsed"]  # AI Parsed JSON
-
+    mongo_resume_upload_collection = mongo_db["resume_upload"]
+    mongo_resume_parsed_collection = mongo_db["resume_parsed"]
     print("MongoDB connection successful.")
 
 except ConnectionFailure as e:
@@ -112,8 +107,8 @@ RESUME_STEPS = [
     {"field": "summary", "question": "Professional **Summary**? (Type 'Generate' to see options, or type your own)",
      "mandatory": True, "type": "long_text", "suggestions": ["Generate Options", "Show Example"]},
     {"field": "critique",
-     "question": "Profile complete! Review your profile on the right. Type 'Critique' for AI feedback or 'Submit' to finalize.",
-     "mandatory": False, "type": "final", "suggestions": ["Critique", "Submit"]}
+     "question": "Profile complete! Review your profile. Use the buttons below to **Check ATS Score** or **Submit**.",
+     "mandatory": False, "type": "final", "suggestions": ["Check ATS Score", "Submit"]}
 ]
 
 
@@ -159,19 +154,17 @@ def get_dynamic_suggestions(field, data):
         if field == "job_title":
             exp = data.get("experience_level", "Entry Level")
             dom = data.get("domain", "General")
-
             prompt = f"List 3 standard job titles for a '{exp}' professional in the '{dom}' industry. Output ONLY the titles separated by commas."
             response = model.generate_content(prompt)
             return [s.strip() for s in response.text.split(',') if s.strip()][:3]
 
         if field == "skills":
             job = data.get("job_title", "Professional")
-            prompt = f"List 6 distinct, single technical or soft skills (e.g. Python, SQL, Communication) suitable for a '{job}'. Output ONLY the skills separated by commas."
+            prompt = f"List 6 distinct, single technical or soft skills suitable for a '{job}'. Output ONLY the skills separated by commas."
             response = model.generate_content(prompt)
             return [s.strip() for s in response.text.split(',') if s.strip()][:6]
 
     except Exception as e:
-        print(f"Suggestion Error: {e}")
         return []
     return []
 
@@ -185,7 +178,7 @@ def home(): return render_template('chat.html')
 def resume_page(): return render_template('resume.html')
 
 
-# Chatbot API
+# (Chatbot API routes omitted for brevity - same as before)
 @app.route('/api/conversations', methods=['GET'])
 def get_conversations():
     chats = Conversation.query.order_by(Conversation.created_at.desc()).all()
@@ -278,26 +271,22 @@ def upload_resume():
     if file.filename == '': return jsonify({'error': 'No file selected'}), 400
 
     try:
-        # 1. Generate unique resume_id
-        resume_id = ObjectId()
-
-        # 2. Extract Raw Text
         pdf_reader = PyPDF2.PdfReader(file)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n"
 
-        # 3. Store Raw Data in 'resume_upload'
+        resume_id = ObjectId()
+
         if mongo_resume_upload_collection is not None:
             mongo_resume_upload_collection.insert_one({
                 "_id": resume_id,
-                "resume_id": resume_id,  # Redundant but explicit for queries
+                "resume_id": resume_id,
                 "filename": file.filename,
                 "raw_text_content": text,
                 "timestamp": datetime.utcnow()
             })
 
-        # 4. Parse with Gemini
         prompt = f"""
         Extract details from resume to JSON. Keys: "full_name", "email", "phone", "experience_level", "domain", "job_title", "skills", "summary".
         Text: {text[:4000]}
@@ -306,23 +295,20 @@ def upload_resume():
         cleaned_text = response.text.replace('```json', '').replace('```', '').strip()
         extracted_data = json.loads(cleaned_text)
 
-        # 5. Store Parsed Data in 'resume_parsed'
         if mongo_resume_parsed_collection is not None:
             mongo_resume_parsed_collection.insert_one({
-                "resume_id": resume_id,  # Linking ID
+                "resume_id": resume_id,
                 "parsed_data": extracted_data,
                 "timestamp": datetime.utcnow()
             })
 
-        # 6. Return data + resume_id to frontend
         return jsonify({
             'success': True,
             'data': extracted_data,
-            'resume_id': str(resume_id),  # Send ID as string
-            'message': "I've analyzed your resume and stored the data."
+            'resume_id': str(resume_id),
+            'message': "I've analyzed your resume."
         })
     except Exception as e:
-        print(f"Upload Error: {e}")
         return jsonify({'error': 'Failed to process PDF'}), 500
 
 
@@ -336,46 +322,114 @@ def resume_chat():
     if not session_id:
         session_id = str(ObjectId())
 
-    # 1. Handle Special Commands
+    # --- 1. HANDLE SPECIAL COMMANDS ---
+
+    # Check ATS Score
+    if user_input.lower() == 'check ats score':
+        prompt = f"Act as an ATS scanner. Review this profile: {collected_data}. Target Role: {collected_data.get('job_title')}. Return a score (0-100), 3 missing keywords, and brief feedback. Format nicely."
+        try:
+            ai_resp = model.generate_content(prompt)
+            ai_text = f"**ATS Analysis:**\n\n{ai_resp.text}"
+
+            # --- FIX: Determine if we should return to interview or if we are done ---
+            next_step_idx = find_next_step(collected_data)
+
+            if next_step_idx != -1:
+                # Still missing fields -> Resume interview
+                next_rule = RESUME_STEPS[next_step_idx]
+                ai_text += f"\n\n---\n**Resuming:** {next_rule['question']}"
+
+                # Get dynamic suggestions if needed
+                sugs = next_rule['suggestions']
+                if next_rule['field'] in ['job_title', 'skills']:
+                    dyn = get_dynamic_suggestions(next_rule['field'], collected_data)
+                    if dyn: sugs = dyn
+
+                log_resume_interaction(session_id, user_input, ai_text, next_step_idx, collected_data)
+                return jsonify({
+                    'response': ai_text,
+                    'keep_step': True,  # Keep going
+                    'question': next_rule['question'],
+                    'suggestions': sugs,
+                    'session_id': session_id,
+                    'next_step': next_step_idx  # Tell frontend where we are
+                })
+            else:
+                # Profile full -> Show final options
+                log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+                return jsonify({
+                    'response': ai_text,
+                    'keep_step': True,
+                    'question': RESUME_STEPS[-1]['question'],
+                    'suggestions': RESUME_STEPS[-1]['suggestions'],
+                    'session_id': session_id
+                })
+        except:
+            return jsonify({'error': "ATS Check failed.", 'keep_step': True, 'session_id': session_id})
+
+    # Submit
     if user_input.lower() == 'submit':
-        ai_text = "Interview complete! Please review your details on the right and click the green 'Submit Profile' button to finish."
+        ai_text = "Interview complete! Please click the green 'Submit Profile' button on the right to save your data."
         log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
         return jsonify({'response': ai_text, 'finished': True, 'data': collected_data, 'session_id': session_id})
 
+    # Critique (Apply similar fix as ATS Score)
     if user_input.lower() == 'critique' and collected_data.get('summary'):
-        prompt = f"Critique the following resume profile for a {collected_data.get('job_title')}. Focus on the summary and skills. Profile: {collected_data}"
+        prompt = f"Critique resume: {collected_data}"
         try:
             ai_resp = model.generate_content(prompt)
             ai_text = f"**AI Critique:**\n\n{ai_resp.text}"
-            log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
-            return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[-1]['question'],
-                            'suggestions': RESUME_STEPS[-1]['suggestions'], 'session_id': session_id})
+
+            next_step_idx = find_next_step(collected_data)
+            if next_step_idx != -1:
+                next_rule = RESUME_STEPS[next_step_idx]
+                ai_text += f"\n\n---\n**Resuming:** {next_rule['question']}"
+
+                sugs = next_rule['suggestions']
+                if next_rule['field'] in ['job_title', 'skills']:
+                    dyn = get_dynamic_suggestions(next_rule['field'], collected_data)
+                    if dyn: sugs = dyn
+
+                log_resume_interaction(session_id, user_input, ai_text, next_step_idx, collected_data)
+                return jsonify({
+                    'response': ai_text, 'keep_step': True,
+                    'question': next_rule['question'], 'suggestions': sugs,
+                    'session_id': session_id, 'next_step': next_step_idx
+                })
+            else:
+                log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+                return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[-1]['question'],
+                                'suggestions': RESUME_STEPS[-1]['suggestions'], 'session_id': session_id})
         except:
             return jsonify({'error': "Critique failed.", 'keep_step': True, 'session_id': session_id})
 
+    # Skill Suggestion
     if user_input.lower() == 'suggest skills' and collected_data.get('job_title'):
         prompt = f"Based on the job title '{collected_data.get('job_title')}' and existing skills '{collected_data.get('skills')}', suggest 3-5 highly relevant, modern skills that are missing. List them separated by a comma."
         try:
             ai_resp = model.generate_content(prompt)
             ai_text = f"**Suggested Skills:**\n\n{ai_resp.text}"
             log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+            # Stay on Skills step (5)
             return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[5]['question'],
                             'suggestions': RESUME_STEPS[5]['suggestions'], 'session_id': session_id})
         except:
             return jsonify({'error': "Skill suggestion failed.", 'keep_step': True, 'session_id': session_id})
 
+    # Example Summary
     if user_input.lower() == 'show example' and collected_data.get('job_title'):
         prompt = f"Provide a brief, strong example of a professional summary for a {collected_data.get('experience_level')} {collected_data.get('job_title')}."
         try:
             ai_resp = model.generate_content(prompt)
             ai_text = f"**Example Summary:**\n\n{ai_resp.text}"
             log_resume_interaction(session_id, user_input, ai_text, current_step_index, collected_data)
+            # Stay on Summary step (6)
             return jsonify({'response': ai_text, 'keep_step': True, 'question': RESUME_STEPS[6]['question'],
                             'suggestions': RESUME_STEPS[6]['suggestions'], 'session_id': session_id})
         except:
             return jsonify({'error': "Example generation failed.", 'keep_step': True, 'session_id': session_id})
 
-    # 2. Validation & Input Handling
+    # --- 2. VALIDATION & INPUT HANDLING ---
     just_saved_summary = False
     if current_step_index != -1 and user_input:
         current_rule = RESUME_STEPS[current_step_index]
@@ -416,10 +470,10 @@ def resume_chat():
         if current_rule['field'] == 'summary':
             just_saved_summary = True
 
-    # 3. Determine Next Step
+    # --- 3. DETERMINE NEXT STEP ---
     next_step_index = find_next_step(collected_data)
 
-    # 4. Formulate Response & Suggestions
+    # --- 4. FORMULATE RESPONSE ---
     if next_step_index == -1:
         ai_text = "Profile complete! Please review and submit."
         if just_saved_summary:
@@ -466,18 +520,16 @@ def submit_resume():
 
     try:
         new_profile = request.json
-
-        # 1. Chat Log Linking
         session_id_str = new_profile.pop('resume_session_id', None)
+        upload_id_str = new_profile.pop('upload_resume_id', None)
+
         if session_id_str and ObjectId.is_valid(session_id_str):
             new_profile['chat_session_id'] = ObjectId(session_id_str)
         else:
             new_profile['chat_session_id'] = None
 
-        # 2. PDF Upload Linking
-        upload_id_str = new_profile.pop('upload_resume_id', None)
         if upload_id_str and ObjectId.is_valid(upload_id_str):
-            new_profile['resume_upload_id'] = ObjectId(upload_id_str)  # Links to resume_upload & resume_parsed
+            new_profile['resume_upload_id'] = ObjectId(upload_id_str)
         else:
             new_profile['resume_upload_id'] = None
 

@@ -5,13 +5,13 @@ const finalForm = document.getElementById('final-form');
 const formPlaceholder = document.getElementById('form-placeholder');
 const successModal = document.getElementById('success-modal');
 const resumeUpload = document.getElementById('resume-upload');
+const progressBar = document.getElementById('progress-bar'); // Feature 1
 
 let currentStep = -1;
 let collectedData = {};
 let resumeSessionId = null;
-let currentResumeUploadId = null; // NEW: To track the PDF upload ID
+let currentResumeUploadId = null;
 
-// Make sure this matches Python RESUME_STEPS exactly
 const RESUME_STEPS = [
     { field: "full_name" },
     { field: "email" },
@@ -19,8 +19,8 @@ const RESUME_STEPS = [
     { field: "experience_level" },
     { field: "domain" },
     { field: "job_title" },
-    { field: "skills" }, // Index 6
-    { field: "summary" }, // Index 7
+    { field: "skills" },
+    { field: "summary" },
     { field: "critique" }
 ];
 
@@ -90,6 +90,7 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
 
             if (data.next_step !== undefined && !data.keep_step) {
                 currentStep = data.next_step;
+                updateProgressBar(); // Feature 1: Update Progress
             }
 
             if (data.data && !data.keep_step) {
@@ -118,6 +119,12 @@ function sendResumeMessage(isInit = false, silentCheck = false) {
     });
 }
 
+function updateProgressBar() {
+    if(!progressBar) return;
+    let progress = ((currentStep + 1) / RESUME_STEPS.length) * 100;
+    progressBar.style.width = `${progress}%`;
+}
+
 function disableChatInput() {
     userInput.disabled = true;
     userInput.placeholder = "Interview Complete. Please Submit.";
@@ -135,7 +142,7 @@ function renderSuggestions(suggestions, currentFieldName) {
 
         chip.onclick = () => {
             // COMMANDS: Auto-send
-            if (['Generate Options', 'Show Example', 'Suggest Skills', 'Critique', 'Submit'].includes(text)) {
+            if (['Generate Options', 'Show Example', 'Suggest Skills', 'Critique', 'Submit', 'Check ATS Score'].includes(text)) {
                 userInput.value = text;
                 sendResumeMessage();
                 return;
@@ -144,7 +151,6 @@ function renderSuggestions(suggestions, currentFieldName) {
             // SKILLS: Multi-Select (No Auto-Send)
             if (currentFieldName === 'skills') {
                 chip.classList.toggle('selected');
-
                 let currentVal = userInput.value.trim();
                 let selectedSkill = text.trim();
 
@@ -156,7 +162,7 @@ function renderSuggestions(suggestions, currentFieldName) {
                 }
                 userInput.focus();
             }
-            // SUMMARY RESULTS: Auto-Send
+            // SUMMARY RESULTS: Auto-Send (Populate & Send)
             else if (currentFieldName === 'summary') {
                 let cleanText = text.replace(/^[\s\W]*(?:Option|Summary)\s*\d*[:\.]\s*/i, '').trim();
                 userInput.value = cleanText;
@@ -190,13 +196,10 @@ function uploadResume(file) {
             appendMessage(`⚠️ ${data.error}`, 'bot-message error');
         } else {
             collectedData = { ...collectedData, ...data.data };
-
-            // Capture Resume ID
             if (data.resume_id) {
                 currentResumeUploadId = data.resume_id;
                 localStorage.setItem('resumeUploadId', currentResumeUploadId);
             }
-
             updateLiveForm(collectedData);
             localStorage.setItem('resumeData', JSON.stringify(collectedData));
             if (Object.keys(collectedData).length > 0) showForm();
@@ -218,7 +221,12 @@ resumeUpload.addEventListener('change', function() {
 function updateLiveForm(data) {
     for (const [key, value] of Object.entries(data)) {
         const field = document.getElementById(`form-${key}`);
-        if (field) field.value = value;
+        // Feature 2: Flash Update
+        if (field && field.value !== value) {
+            field.value = value;
+            field.classList.add('flash-update');
+            setTimeout(() => field.classList.remove('flash-update'), 1000);
+        }
     }
 }
 
@@ -239,12 +247,12 @@ function submitFinalForm() {
         email: document.getElementById('form-email').value.trim(),
         phone: document.getElementById('form-phone').value.trim(),
         experience_level: document.getElementById('form-experience_level').value.trim(),
-        domain: collectedData.domain || document.getElementById('form-domain').value.trim(),
+        domain: document.getElementById('form-domain').value.trim(),
         job_title: document.getElementById('form-job_title').value.trim(),
         skills: document.getElementById('form-skills').value.trim(),
         summary: document.getElementById('form-summary').value.trim(),
         resume_session_id: resumeSessionId,
-        upload_resume_id: currentResumeUploadId // Send linked PDF ID
+        upload_resume_id: currentResumeUploadId
     };
 
     const emptyFields = [];
@@ -295,6 +303,16 @@ function appendMessage(text, className, isMarkdown = false) {
         <div class="content">${isMarkdown ? marked.parse(text) : text}</div>
     `;
 
+    // Feature 5: Edit Previous Input (Click Bubble to Edit)
+    if (className.includes('user')) {
+        div.style.cursor = 'pointer';
+        div.title = "Click to edit";
+        div.onclick = () => {
+            userInput.value = text;
+            userInput.focus();
+        };
+    }
+
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
@@ -324,6 +342,25 @@ function clearProfile() {
         localStorage.removeItem('resumeSessionId');
         localStorage.removeItem('resumeUploadId');
         window.location.reload();
+    }
+}
+
+// Feature 3: PDF Export
+function downloadPDF() {
+    const element = document.getElementById('final-form');
+    // Basic config, usually needs adjustments based on styling
+    const opt = {
+        margin: 0.5,
+        filename: 'My_Resume.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    // Ensure html2pdf is loaded
+    if(typeof html2pdf !== 'undefined') {
+        html2pdf().set(opt).from(element).save();
+    } else {
+        alert("PDF generator not loaded yet.");
     }
 }
 
